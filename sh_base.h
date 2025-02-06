@@ -4,6 +4,7 @@
 #ifndef __SH_BASE_INCLUDE__
 #define __SH_BASE_INCLUDE__
 
+#  include <assert.h>
 #  include <stddef.h>
 #  include <stdint.h>
 #  include <stdbool.h>
@@ -81,6 +82,7 @@ typedef struct
     ShAllocatorFunc func;
 } ShAllocator;
 
+#  define sh_alloc_type(allocator, type) (type *) sh_alloc(allocator, sizeof(type))
 #  define sh_alloc_array(allocator, type, count) (type *) sh_alloc(allocator, (count) * sizeof(type))
 
 SH_BASE_DEF void *sh_alloc(ShAllocator allocator, usize size);
