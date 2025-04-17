@@ -5,7 +5,7 @@
 #define __SH_BASE64_INCLUDE__
 
 #  ifndef __SH_BASE_INCLUDE__
-#    error "sh_hash.h requires sh_base.h to be included first"
+#    error "sh_base64.h requires sh_base.h to be included first"
 #  endif
 
 #  if defined(SH_STATIC) || defined(SH_BASE64_STATIC)
