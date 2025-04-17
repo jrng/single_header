@@ -65,7 +65,12 @@ typedef struct
 
 #  define ShStringFmt ".*s"
 #  define ShStringArg(str) (int) (str).count, (str).data
-#  define ShStringLiteral(str) { sizeof(str) - 1, (uint8_t *) (str) }
+
+#  ifdef __cplusplus
+#    define ShStringLiteral(str) ShString { sizeof(str) - 1, (uint8_t *) (str) }
+#  else
+#    define ShStringLiteral(str) (ShString) { sizeof(str) - 1, (uint8_t *) (str) }
+#  endif
 
 typedef enum
 {
