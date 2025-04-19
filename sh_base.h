@@ -79,7 +79,7 @@ typedef enum
     SH_ALLOCATOR_ACTION_FREE    = 2,
 } ShAllocatorAction;
 
-typedef void *(*ShAllocatorFunc)(void *allocator_data, ShAllocatorAction action, usize size, void *ptr);
+typedef void *(*ShAllocatorFunc)(void *allocator_data, ShAllocatorAction action, usize old_size, usize size, void *ptr);
 
 typedef struct
 {
@@ -90,8 +90,50 @@ typedef struct
 #  define sh_alloc_type(allocator, type) (type *) sh_alloc(allocator, sizeof(type))
 #  define sh_alloc_array(allocator, type, count) (type *) sh_alloc(allocator, (count) * sizeof(type))
 
+typedef struct
+{
+    uint8_t *base;
+    usize capacity;
+    usize occupied;
+} ShArena;
+
+typedef struct
+{
+    ShAllocator allocator;
+    usize count;
+    usize allocated;
+} ShArrayHeader;
+
+#  define sh_array_header(array) ((ShArrayHeader *) (array) - 1)
+#  define sh_array_count(array) ((array) ? sh_array_header(array)->count : 0)
+#  define sh_array_allocated(array) ((array) ? sh_array_header(array)->allocated : 0)
+#  define sh_array_append(array) ((array) ? (sh_array_ensure_space(array), (array) + sh_array_header(array)->count++) : 0)
+
+#  ifdef __cplusplus
+#    define sh_array_init(array, initial_allocated, allocator)  \
+        ((array) = (decltype(+(array))) sh_array_grow(array, initial_allocated, sizeof(*(array)), allocator))
+#    define sh_array_ensure_space(array) \
+        (((sh_array_count(array) + 1) > sh_array_allocated(array)) ? \
+            (array) = (decltype(+(array))) sh_array_grow(array, 2 * sh_array_allocated(array), sizeof(*(array)), ShAllocator {0, 0}) : 0)
+#  else
+#    define sh_array_init(array, initial_allocated, allocator)  \
+        ((array) = sh_array_grow(array, initial_allocated, sizeof(*(array)), allocator))
+#    define sh_array_ensure_space(array) \
+        (((sh_array_count(array) + 1) > sh_array_allocated(array)) ? \
+            (array) = sh_array_grow(array, 2 * sh_array_allocated(array), sizeof(*(array)), (ShAllocator) {0, 0}) : 0)
+#  endif
+
+SH_BASE_DEF void sh_arena_init_with_memory(ShArena *arena, void *memory, usize memory_size);
+SH_BASE_DEF void sh_arena_allocate(ShArena *arena, usize capacity, ShAllocator allocator);
+SH_BASE_DEF void sh_arena_clear(ShArena *arena);
+SH_BASE_DEF void *sh_arena_alloc(ShArena *arena, usize size);
+SH_BASE_DEF void *sh_arena_realloc(ShArena *arena, void *ptr, usize old_size, usize size);
+SH_BASE_DEF ShAllocator sh_arena_get_allocator(ShArena *arena);
+
+SH_BASE_DEF void *sh_array_grow(void *array, usize new_allocated, usize item_size, ShAllocator allocator);
+
 SH_BASE_DEF void *sh_alloc(ShAllocator allocator, usize size);
-SH_BASE_DEF void *sh_realloc(ShAllocator allocator, void *ptr, usize size);
+SH_BASE_DEF void *sh_realloc(ShAllocator allocator, void *ptr, usize old_size, usize size);
 SH_BASE_DEF void sh_free(ShAllocator allocator, void *ptr);
 
 SH_BASE_DEF bool sh_string_equal(ShString a, ShString b);
@@ -100,22 +142,161 @@ SH_BASE_DEF bool sh_string_equal(ShString a, ShString b);
 
 #ifdef SH_BASE_IMPLEMENTATION
 
-SH_BASE_DEF void *
-sh_alloc(ShAllocator allocator, usize size)
+SH_BASE_DEF void
+sh_arena_init_with_memory(ShArena *arena, void *memory, usize memory_size)
 {
-    return allocator.func(allocator.data, SH_ALLOCATOR_ACTION_ALLOC, size, 0);
+    arena->base = (uint8_t *) memory;
+    arena->capacity = memory_size;
+    arena->occupied = 0;
+}
+
+SH_BASE_DEF void
+sh_arena_allocate(ShArena *arena, usize capacity, ShAllocator allocator)
+{
+    arena->base = (uint8_t *) sh_alloc(allocator, capacity);
+    arena->capacity = capacity;
+    arena->occupied = 0;
+}
+
+SH_BASE_DEF void
+sh_arena_clear(ShArena *arena)
+{
+    arena->occupied = 0;
 }
 
 SH_BASE_DEF void *
-sh_realloc(ShAllocator allocator, void *ptr, usize size)
+sh_arena_alloc(ShArena *arena, usize size)
 {
-    return allocator.func(allocator.data, SH_ALLOCATOR_ACTION_REALLOC, size, ptr);
+    void *result = 0;
+
+    const usize alignment = 8;
+    const usize alignment_mask = alignment - 1;
+
+    usize alignment_offset = 0;
+    usize next_pointer = (usize) (arena->base + arena->occupied);
+
+    if (next_pointer & alignment_mask)
+    {
+        alignment_offset = alignment - (next_pointer & alignment_mask);
+    }
+
+    usize effective_size = size + alignment_offset;
+
+    if ((arena->occupied + effective_size) <= arena->capacity)
+    {
+        result = arena->base + arena->occupied + alignment_offset;
+        arena->occupied += effective_size;
+    }
+
+    return result;
+}
+
+SH_BASE_DEF void *
+sh_arena_realloc(ShArena *arena, void *ptr, usize old_size, usize size)
+{
+    void *result = ptr;
+
+    if (size > old_size)
+    {
+        // TODO: optimize: don't copy if right next to each other
+        result = sh_arena_alloc(arena, size);
+
+        if (result)
+        {
+            uint8_t *dst = (uint8_t *) result;
+            uint8_t *src = (uint8_t *) ptr;
+
+            while (old_size--) *dst++ = *src++;
+        }
+    }
+
+    return result;
+}
+
+static void *
+_sh_arena_allocator_func(void *allocator_data, ShAllocatorAction action, usize old_size, usize size, void *ptr)
+{
+    void *result = 0;
+    ShArena *arena = (ShArena *) allocator_data;
+
+    switch (action)
+    {
+        case SH_ALLOCATOR_ACTION_ALLOC:   result = sh_arena_alloc(arena, size);                  break;
+        case SH_ALLOCATOR_ACTION_REALLOC: result = sh_arena_realloc(arena, ptr, old_size, size); break;
+        case SH_ALLOCATOR_ACTION_FREE:    /* there is no free for arena */                       break;
+    }
+
+    return result;
+}
+
+SH_BASE_DEF ShAllocator
+sh_arena_get_allocator(ShArena *arena)
+{
+    ShAllocator allocator;
+    allocator.data = arena;
+    allocator.func = _sh_arena_allocator_func;
+    return allocator;
+}
+
+SH_BASE_DEF void *
+sh_array_grow(void *array, usize allocated, usize item_size, ShAllocator allocator)
+{
+    ShArrayHeader *array_header;
+
+    if (array)
+    {
+        ShArrayHeader *old_array_header = sh_array_header(array);
+
+        usize old_allocated = old_array_header->allocated;
+        usize old_size = sizeof(ShArrayHeader) + (old_allocated * item_size);
+
+        if (allocated > old_allocated)
+        {
+            usize size = sizeof(ShArrayHeader) + (allocated * item_size);
+
+            array_header = (ShArrayHeader *) sh_realloc(old_array_header->allocator, old_array_header, old_size, size);
+            array_header->allocated = allocated;
+        }
+        else
+        {
+            array_header = old_array_header;
+        }
+    }
+    else
+    {
+        if (allocated < 4)
+        {
+            allocated = 4;
+        }
+
+        usize size = sizeof(ShArrayHeader) + (allocated * item_size);
+
+        array_header = (ShArrayHeader *) sh_alloc(allocator, size);
+
+        array_header->count = 0;
+        array_header->allocated = allocated;
+        array_header->allocator = allocator;
+    }
+
+    return array_header + 1;
+}
+
+SH_BASE_DEF void *
+sh_alloc(ShAllocator allocator, usize size)
+{
+    return allocator.func(allocator.data, SH_ALLOCATOR_ACTION_ALLOC, 0, size, 0);
+}
+
+SH_BASE_DEF void *
+sh_realloc(ShAllocator allocator, void *ptr, usize old_size, usize size)
+{
+    return allocator.func(allocator.data, SH_ALLOCATOR_ACTION_REALLOC, old_size, size, ptr);
 }
 
 SH_BASE_DEF void
 sh_free(ShAllocator allocator, void *ptr)
 {
-    allocator.func(allocator.data, SH_ALLOCATOR_ACTION_FREE, 0, ptr);
+    allocator.func(allocator.data, SH_ALLOCATOR_ACTION_FREE, 0, 0, ptr);
 }
 
 SH_BASE_DEF bool

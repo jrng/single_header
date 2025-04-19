@@ -6,9 +6,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-void *c_default_allocator_func(void *allocator_data, ShAllocatorAction action, usize size, void *ptr)
+void *c_default_allocator_func(void *allocator_data, ShAllocatorAction action, usize old_size, usize size, void *ptr)
 {
     (void) allocator_data;
+    (void) old_size;
 
     void *result = 0;
 
