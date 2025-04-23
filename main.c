@@ -48,18 +48,6 @@ check_sha1(usize size, char const *str, ShSha1 *expected_sha1)
     }
 }
 
-static void
-coroutine_counter(ShCoroutineContext *ctx, void *data)
-{
-    int n = (intptr_t) data;
-
-    for (int i = 0; i < n; i += 1)
-    {
-        printf("count %d\n", i);
-        sh_coroutine_yield(ctx);
-    }
-}
-
 int main(void)
 {
     ShAllocator allocator;
@@ -95,32 +83,6 @@ int main(void)
         }
 
         sh_free(allocator, hello_world_base64.data);
-
-        printf("\n");
-    }
-
-    {
-        printf("--- sh_coroutine --------\n");
-
-        ShCoroutineContext coroutine_context;
-        sh_coroutine_init(&coroutine_context, allocator);
-
-        sh_coroutine_create(&coroutine_context, coroutine_counter, (void *) 4);
-        sh_coroutine_create(&coroutine_context, coroutine_counter, (void *) 2);
-
-        for(int i = 0; i < 6; i += 1)
-        {
-            printf("main loop %d\n", i);
-            sh_coroutine_yield(&coroutine_context);
-        }
-
-        sh_coroutine_create(&coroutine_context, coroutine_counter, (void *) 2);
-
-        for(int i = 0; i < 3; i += 1)
-        {
-            printf("main loop %d\n", i);
-            sh_coroutine_yield(&coroutine_context);
-        }
 
         printf("\n");
     }

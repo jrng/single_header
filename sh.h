@@ -5,13 +5,11 @@
 #  define SH_BASE_IMPLEMENTATION
 #  define SH_HASH_IMPLEMENTATION
 #  define SH_BASE64_IMPLEMENTATION
-#  define SH_COROUTINE_IMPLEMENTATION
 #endif // SH_IMPLEMENTATION
 
 #include "sh_base.h"
 #include "sh_hash.h"
 #include "sh_base64.h"
-#include "sh_coroutine.h"
 
 /*
 MIT License
