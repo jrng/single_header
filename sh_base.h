@@ -5,6 +5,7 @@
 #define __SH_BASE_INCLUDE__
 
 #  include <assert.h>
+#  include <stdarg.h>
 #  include <stddef.h>
 #  include <stdint.h>
 #  include <stdbool.h>
@@ -137,6 +138,12 @@ SH_BASE_DEF void *sh_realloc(ShAllocator allocator, void *ptr, usize old_size, u
 SH_BASE_DEF void sh_free(ShAllocator allocator, void *ptr);
 
 SH_BASE_DEF bool sh_string_equal(ShString a, ShString b);
+
+SH_BASE_DEF ShString sh_string_concat_n(ShAllocator allocator, usize n, ...);
+
+SH_BASE_DEF ShString sh_string_trim(ShString str);
+SH_BASE_DEF ShString sh_string_split_left(ShString *str, uint8_t c);
+SH_BASE_DEF ShString sh_string_split_left_http_line(ShString *str);
 
 #endif // __SH_BASE_INCLUDE__
 
@@ -316,6 +323,131 @@ sh_string_equal(ShString a, ShString b)
     }
 
     return true;
+}
+
+SH_BASE_DEF ShString
+sh_string_concat_n(ShAllocator allocator, usize n, ...)
+{
+    ShString result = { 0, 0 };
+    ShString *strings = sh_alloc_array(allocator, ShString, n);
+
+    va_list args;
+    va_start(args, n);
+
+    for (usize i = 0; i < n; i += 1)
+    {
+        strings[i] = va_arg(args, ShString);
+        result.count += strings[i].count;
+    }
+
+    va_end(args);
+
+    result.data = sh_alloc_array(allocator, uint8_t, result.count);
+
+    uint8_t *at = result.data;
+
+    for (usize i = 0; i < n; i += 1)
+    {
+        ShString str = strings[i];
+
+        for (usize j = 0; j < str.count; j += 1)
+        {
+            *at++ = str.data[j];
+        }
+    }
+
+    sh_free(allocator, strings);
+
+    return result;
+}
+
+SH_BASE_DEF ShString
+sh_string_trim(ShString str)
+{
+    while (str.count && ((str.data[str.count - 1] == ' ') ||
+                         (str.data[str.count - 1] == '\t') ||
+                         (str.data[str.count - 1] == '\r') ||
+                         (str.data[str.count - 1] == '\n')))
+    {
+        str.count -= 1;
+    }
+
+    while (str.count && ((str.data[0] == ' ') || (str.data[0] == '\t') ||
+                         (str.data[0] == '\r') || (str.data[0] == '\n')))
+    {
+        str.count -= 1;
+        str.data += 1;
+    }
+
+    return str;
+}
+
+SH_BASE_DEF ShString
+sh_string_split_left(ShString *str, uint8_t c)
+{
+    usize index = 0;
+
+    while (index < str->count)
+    {
+        if (str->data[index] == c)
+        {
+            break;
+        }
+
+        index += 1;
+    }
+
+    ShString result;
+    result.count = index;
+    result.data = str->data;
+
+    if (index < str->count)
+    {
+        str->count -= index + 1;
+        str->data += index + 1;
+    }
+    else
+    {
+        str->count -= index;
+        str->data += index;
+    }
+
+    return result;
+}
+
+SH_BASE_DEF ShString
+sh_string_split_left_http_line(ShString *str)
+{
+    usize index = 0;
+
+    while (index < str->count)
+    {
+        if ((str->data[index] == '\r') &&
+            ((index + 1) < str->count) &&
+            (str->data[index + 1] == '\n'))
+        {
+            break;
+        }
+
+        index += 1;
+    }
+
+    ShString result;
+    result.count = index;
+    result.data = str->data;
+
+    if (index < str->count)
+    {
+        str->count -= index + 2;
+        str->data += index + 2;
+    }
+    else
+    {
+        str->count -= index;
+        str->data += index;
+    }
+
+    return result;
 }
 
 #endif // SH_BASE_IMPLEMENTATION
