@@ -16,16 +16,26 @@
 #    error "sh_http_server.h requires sh_string_builder.h to be included first"
 #  endif
 
-#  include <stdio.h>
+#  include <stdio.h> // TODO: remove
 
-// UNIX START
-#  include <poll.h>
-#  include <errno.h>
-#  include <fcntl.h>
-#  include <unistd.h>
-#  include <netinet/in.h>
-#  include <sys/socket.h>
-// UNIX END
+#  if SH_PLATFORM_WINDOWS
+
+#    include <winsock2.h>
+
+#    if !defined(__MINGW32__)
+#      pragma comment(lib, "Ws2_32")
+#    endif
+
+#  elif SH_PLATFORM_UNIX
+
+#    include <poll.h>
+#    include <errno.h>
+#    include <fcntl.h>
+#    include <unistd.h>
+#    include <netinet/in.h>
+#    include <sys/socket.h>
+
+#  endif
 
 #  if defined(SH_STATIC) || defined(SH_HTTP_SERVER_STATIC)
 #    define SH_HTTP_SERVER_DEF static
@@ -78,9 +88,9 @@ typedef struct
     bool close_connection;
     bool is_waiting_for_request;
 
-    // UNIX START
+#  if SH_PLATFORM_UNIX
     int socket;
-    // UNIX END
+#  endif
 } ShHttpClient;
 
 typedef void (*ShHttpRequestCallback)(ShHttpRequest request, ShStringBuilder *response);
@@ -99,10 +109,9 @@ typedef struct
 
     ShHttpRequestCallback handle_request;
 
-    // UNIX START
+#  if SH_PLATFORM_UNIX
     int socket;
-    struct pollfd *sockets;
-    // UNIX END
+#  endif
 } ShHttpServer;
 
 // Creates an http server and starts listening to the given port.
@@ -125,7 +134,24 @@ SH_HTTP_SERVER_DEF void sh_http_server_destroy(ShHttpServer *http_server);
 SH_HTTP_SERVER_DEF bool
 sh_http_server_create(ShHttpServer *http_server, ShAllocator allocator, uint16_t port, uint16_t max_client_count, ShHttpRequestCallback handle_request)
 {
-    http_server->socket = socket(AF_INET, SOCK_STREAM, 0);
+#  if SH_PLATFORM_WINDOWS
+    WSADATA winsocket_data;
+
+    if (WSAStartup(MAKEWORD(2, 2), &winsocket_data) != 0)
+    {
+        return false;
+    }
+
+    if ((LOBYTE(winsocket_data.wVersion) != 2) ||
+        (HIBYTE(winsocket_data.wVersion) != 2))
+    {
+        WSACleanup();
+        return false;
+    }
+
+    assert(!"unimplemented");
+#  elif SH_PLATFORM_UNIX
+    http_server->socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
     if (http_server->socket < 0)
     {
@@ -173,25 +199,22 @@ sh_http_server_create(ShHttpServer *http_server, ShAllocator allocator, uint16_t
         close(http_server->socket);
         return false;
     }
+#  endif
 
     http_server->client_count = 0;
     http_server->max_client_count = max_client_count;
     http_server->handle_request = handle_request;
 
-    usize sockets_size       = (max_client_count + 1) * sizeof(struct pollfd);
     usize clients_size       =  max_client_count      * sizeof(ShHttpClient);
     usize input_buffers_size =  max_client_count      * INPUT_BUFFER_SIZE;
     usize arenas_size        = (max_client_count + 1) * ARENA_CAPACITY;
 
-    usize total_size = sockets_size + clients_size + input_buffers_size + arenas_size;
+    usize total_size = clients_size + input_buffers_size + arenas_size;
 
     http_server->allocation = sh_alloc(allocator, total_size);
     http_server->allocator = allocator;
 
     uint8_t *ptr = (uint8_t *) http_server->allocation;
-
-    http_server->sockets = (struct pollfd *) ptr;
-    ptr += sockets_size;
 
     http_server->clients = (ShHttpClient *) ptr;
     ptr += clients_size;
@@ -221,23 +244,25 @@ sh_http_server_run(ShHttpServer *http_server, bool wait_for_event)
     sh_arena_clear(&http_server->arena);
     ShAllocator temp_allocator = sh_arena_get_allocator(&http_server->arena);
 
-    uint16_t *clients_to_delete = 0;
+    uint16_t *clients_to_delete = NULL;
     sh_array_init(clients_to_delete, 4, temp_allocator);
 
-    // TODO: allocate sockets via arena every run
-    http_server->sockets[0].fd      = http_server->socket;
-    http_server->sockets[0].events  = POLLIN;
-    http_server->sockets[0].revents = 0;
-
     uint16_t current_client_count = http_server->client_count;
+
+#  if SH_PLATFORM_UNIX
+    struct pollfd *sockets = sh_alloc_array(temp_allocator, struct pollfd, current_client_count + 1);
+
+    sockets[0].fd      = http_server->socket;
+    sockets[0].events  = POLLIN;
+    sockets[0].revents = 0;
 
     for (uint16_t i = 0; i < current_client_count; i += 1)
     {
         ShHttpClient *client = http_server->clients + i;
 
-        http_server->sockets[i + 1].fd      = client->socket;
-        http_server->sockets[i + 1].events  = client->is_waiting_for_request ? POLLIN : POLLOUT;
-        http_server->sockets[i + 1].revents = 0;
+        sockets[i + 1].fd      = client->socket;
+        sockets[i + 1].events  = client->is_waiting_for_request ? POLLIN : POLLOUT;
+        sockets[i + 1].revents = 0;
     }
 
     int timeout = 0;
@@ -247,11 +272,11 @@ sh_http_server_run(ShHttpServer *http_server, bool wait_for_event)
         timeout = -1;
     }
 
-    int ret = poll(http_server->sockets, current_client_count + 1, timeout);
+    int ret = poll(sockets, current_client_count + 1, timeout);
 
     if (ret > 0)
     {
-        if (http_server->sockets[0].revents & POLLIN)
+        if (sockets[0].revents & POLLIN)
         {
             struct sockaddr_in client_addr;
             socklen_t client_addr_len = sizeof(client_addr);
@@ -285,7 +310,7 @@ sh_http_server_run(ShHttpServer *http_server, bool wait_for_event)
         {
             ShHttpClient *client = http_server->clients + i;
 
-            if (http_server->sockets[i + 1].revents & POLLIN)
+            if (sockets[i + 1].revents & POLLIN)
             {
                 sh_arena_clear(&client->arena);
 
@@ -331,7 +356,7 @@ sh_http_server_run(ShHttpServer *http_server, bool wait_for_event)
                     sh_string_builder_init(&client->output_builder, allocator);
 
                     ShHttpRequest request;
-                    request.header_fields = 0;
+                    request.header_fields = NULL;
                     sh_array_init(request.header_fields, 16, allocator);
 
                     if (sh_http_parse_request(&request, client->input_buffer))
@@ -345,10 +370,10 @@ sh_http_server_run(ShHttpServer *http_server, bool wait_for_event)
                             client->close_connection = true;
                         }
 
-                        ShHttpHeaderField *connection_field = 0;
-                        ShHttpHeaderField *websocket_version_field = 0;
-                        ShHttpHeaderField *websocket_key_field = 0;
-                        ShHttpHeaderField *upgrade_field = 0;
+                        ShHttpHeaderField *connection_field = NULL;
+                        ShHttpHeaderField *websocket_version_field = NULL;
+                        ShHttpHeaderField *websocket_key_field = NULL;
+                        ShHttpHeaderField *upgrade_field = NULL;
 
                         // TODO: header field names are case-insensitive
                         for (usize j = 0; j < sh_array_count(request.header_fields); j += 1)
@@ -416,36 +441,35 @@ sh_http_server_run(ShHttpServer *http_server, bool wait_for_event)
                             }
                         }
 
+                        if ((sh_string_builder_get_size(&client->output_builder) == 0) &&
+                            http_server->handle_request)
+                        {
+                            http_server->handle_request(request, &client->output_builder);
+                        }
+
                         if (sh_string_builder_get_size(&client->output_builder) == 0)
                         {
-                            if (http_server->handle_request)
-                            {
-                                http_server->handle_request(request, &client->output_builder);
-                            }
-                            else
-                            {
-                                ShString body = ShStringLiteral(
-                                    "<!doctype html>\n"
-                                    "<html>\n"
-                                    "<head>\n"
-                                    "  <title>500 Internal Server Error</title>\n"
-                                    "</head>\n"
-                                    "<body>\n"
-                                    "  <h1>500 Internal Server Error</h1>\n"
-                                    "  <p>There was no callback registered for handling requests.</p>\n"
-                                    "</body>\n"
-                                    "</html>\n"
-                                );
+                            ShString body = ShStringLiteral(
+                                "<!doctype html>\n"
+                                "<html>\n"
+                                "<head>\n"
+                                "  <title>500 Internal Server Error</title>\n"
+                                "</head>\n"
+                                "<body>\n"
+                                "  <h1>500 Internal Server Error</h1>\n"
+                                "  <p>There was no response generated. Maybe there is no callback registered for handling requests.</p>\n"
+                                "</body>\n"
+                                "</html>\n"
+                            );
 
-                                sh_string_builder_append_string(&client->output_builder, ShStringLiteral("HTTP/1.1 500 Internal Server Error\r\n"));
-                                sh_string_builder_append_string(&client->output_builder, ShStringLiteral("Server: ShHttpServer\r\n"));
-                                sh_string_builder_append_string(&client->output_builder, ShStringLiteral("Content-Type: text/html; charset=utf-8\r\n"));
-                                sh_string_builder_append_string(&client->output_builder, ShStringLiteral("Content-Length: "));
-                                sh_string_builder_append_number(&client->output_builder, body.count, 0, '0', 10, false);
-                                sh_string_builder_append_string(&client->output_builder, ShStringLiteral("\r\n"));
-                                sh_string_builder_append_string(&client->output_builder, ShStringLiteral("\r\n"));
-                                sh_string_builder_append_string(&client->output_builder, body);
-                            }
+                            sh_string_builder_append_string(&client->output_builder, ShStringLiteral("HTTP/1.1 500 Internal Server Error\r\n"));
+                            sh_string_builder_append_string(&client->output_builder, ShStringLiteral("Server: ShHttpServer\r\n"));
+                            sh_string_builder_append_string(&client->output_builder, ShStringLiteral("Content-Type: text/html; charset=utf-8\r\n"));
+                            sh_string_builder_append_string(&client->output_builder, ShStringLiteral("Content-Length: "));
+                            sh_string_builder_append_number(&client->output_builder, body.count, 0, '0', 10, false);
+                            sh_string_builder_append_string(&client->output_builder, ShStringLiteral("\r\n"));
+                            sh_string_builder_append_string(&client->output_builder, ShStringLiteral("\r\n"));
+                            sh_string_builder_append_string(&client->output_builder, body);
                         }
                     }
 
@@ -453,7 +477,7 @@ sh_http_server_run(ShHttpServer *http_server, bool wait_for_event)
                     client->input_buffer.count = 0;
                 }
             }
-            else if (http_server->sockets[i + 1].revents & POLLOUT)
+            else if (sockets[i + 1].revents & POLLOUT)
             {
                 // TODO: do better
                 ShStringBuffer *buffer = client->output_builder.first_buffer;
@@ -469,25 +493,28 @@ sh_http_server_run(ShHttpServer *http_server, bool wait_for_event)
                     *sh_array_append(clients_to_delete) = i;
                 }
             }
-            else if (http_server->sockets[i + 1].revents & (POLLERR | POLLHUP))
+            else if (sockets[i + 1].revents & (POLLERR | POLLHUP))
             {
                 fprintf(stderr, "POLLHUP\n");
                 close(client->socket);
                 *sh_array_append(clients_to_delete) = i;
             }
         }
+    }
+#  else
+    assert(!"unimplemented");
+#  endif
 
-        usize count = sh_array_count(clients_to_delete);
+    usize count = sh_array_count(clients_to_delete);
 
-        for (usize i = 0; i < count; i += 1)
+    for (usize i = 0; i < count; i += 1)
+    {
+        http_server->client_count -= 1;
+        uint16_t index = clients_to_delete[i];
+
+        if (index < http_server->client_count)
         {
-            http_server->client_count -= 1;
-            uint16_t index = clients_to_delete[i];
-
-            if (index < http_server->client_count)
-            {
-                http_server->clients[index] = http_server->clients[http_server->client_count];
-            }
+            http_server->clients[index] = http_server->clients[http_server->client_count];
         }
     }
 }
@@ -594,11 +621,16 @@ sh_http_parse_request(ShHttpRequest *request, ShString request_string)
 SH_HTTP_SERVER_DEF void
 sh_http_server_destroy(ShHttpServer *http_server)
 {
+#  if SH_PLATFORM_UNIX
     close(http_server->socket);
+#  else
+    assert(!"unimplemented");
+#  endif
 
     sh_free(http_server->allocator, http_server->allocation);
 }
 
+#  undef ARENA_CAPACITY
 #  undef INPUT_BUFFER_SIZE
 
 #endif // SH_HTTP_SERVER_IMPLEMENTATION
