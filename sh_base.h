@@ -4,6 +4,36 @@
 #ifndef __SH_BASE_INCLUDE__
 #define __SH_BASE_INCLUDE__
 
+#  define SH_PLATFORM_ANDROID 0
+#  define SH_PLATFORM_FREEBSD 0
+#  define SH_PLATFORM_WINDOWS 0
+#  define SH_PLATFORM_LINUX   0
+#  define SH_PLATFORM_MACOS   0
+
+#  define SH_PLATFORM_UNIX    0
+
+#  if defined(__ANDROID__)
+#    undef  SH_PLATFORM_ANDROID
+#    define SH_PLATFORM_ANDROID 1
+#  elif defined(__FreeBSD__)
+#    undef  SH_PLATFORM_FREEBSD
+#    define SH_PLATFORM_FREEBSD 1
+#  elif defined(_WIN32)
+#    undef  SH_PLATFORM_WINDOWS
+#    define SH_PLATFORM_WINDOWS 1
+#  elif defined(__linux__)
+#    undef  SH_PLATFORM_LINUX
+#    define SH_PLATFORM_LINUX 1
+#  elif defined(__APPLE__) && defined(__MACH__)
+#    undef  SH_PLATFORM_MACOS
+#    define SH_PLATFORM_MACOS 1
+#  endif
+
+#  if SH_PLATFORM_ANDROID || SH_PLATFORM_FREEBSD || SH_PLATFORM_LINUX || SH_PLATFORM_MACOS
+#    undef  SH_PLATFORM_UNIX
+#    define SH_PLATFORM_UNIX 1
+#  endif
+
 #  include <assert.h>
 #  include <stdarg.h>
 #  include <stddef.h>
