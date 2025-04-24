@@ -54,7 +54,7 @@ typedef size_t usize;
 #  define ShGiB(value) (ShMiB(value) * (usize) 1024)
 
 #  define ShArrayCount(arr) (sizeof(arr)/sizeof((arr)[0]))
-#  define ShOffsetOf(type, member) (usize) &((type *) 0)->member
+#  define ShOffsetOf(type, member) (usize) &((type *) NULL)->member
 #  define ShContainerOf(ptr, type, member) (type *) ((uint8_t *) (ptr) - ShOffsetOf(type, member))
 
 typedef struct ShList ShList;
@@ -138,20 +138,20 @@ typedef struct
 #  define sh_array_header(array) ((ShArrayHeader *) (array) - 1)
 #  define sh_array_count(array) ((array) ? sh_array_header(array)->count : 0)
 #  define sh_array_allocated(array) ((array) ? sh_array_header(array)->allocated : 0)
-#  define sh_array_append(array) ((array) ? (sh_array_ensure_space(array), (array) + sh_array_header(array)->count++) : 0)
+#  define sh_array_append(array) ((array) ? (sh_array_ensure_space(array), (array) + sh_array_header(array)->count++) : NULL)
 
 #  ifdef __cplusplus
 #    define sh_array_init(array, initial_allocated, allocator)  \
         ((array) = (decltype(+(array))) sh_array_grow(array, initial_allocated, sizeof(*(array)), allocator))
 #    define sh_array_ensure_space(array) \
         (((sh_array_count(array) + 1) > sh_array_allocated(array)) ? \
-            (array) = (decltype(+(array))) sh_array_grow(array, 2 * sh_array_allocated(array), sizeof(*(array)), ShAllocator {0, 0}) : 0)
+            (array) = (decltype(+(array))) sh_array_grow(array, 2 * sh_array_allocated(array), sizeof(*(array)), ShAllocator { NULL, NULL }) : NULL)
 #  else
 #    define sh_array_init(array, initial_allocated, allocator)  \
         ((array) = sh_array_grow(array, initial_allocated, sizeof(*(array)), allocator))
 #    define sh_array_ensure_space(array) \
         (((sh_array_count(array) + 1) > sh_array_allocated(array)) ? \
-            (array) = sh_array_grow(array, 2 * sh_array_allocated(array), sizeof(*(array)), (ShAllocator) {0, 0}) : 0)
+            (array) = sh_array_grow(array, 2 * sh_array_allocated(array), sizeof(*(array)), (ShAllocator) { NULL, NULL }) : NULL)
 #  endif
 
 SH_BASE_DEF void sh_arena_init_with_memory(ShArena *arena, void *memory, usize memory_size);
@@ -204,7 +204,7 @@ sh_arena_clear(ShArena *arena)
 SH_BASE_DEF void *
 sh_arena_alloc(ShArena *arena, usize size)
 {
-    void *result = 0;
+    void *result = NULL;
 
     const usize alignment = 8;
     const usize alignment_mask = alignment - 1;
@@ -253,7 +253,7 @@ sh_arena_realloc(ShArena *arena, void *ptr, usize old_size, usize size)
 static void *
 _sh_arena_allocator_func(void *allocator_data, ShAllocatorAction action, usize old_size, usize size, void *ptr)
 {
-    void *result = 0;
+    void *result = NULL;
     ShArena *arena = (ShArena *) allocator_data;
 
     switch (action)
@@ -321,7 +321,7 @@ sh_array_grow(void *array, usize allocated, usize item_size, ShAllocator allocat
 SH_BASE_DEF void *
 sh_alloc(ShAllocator allocator, usize size)
 {
-    return allocator.func(allocator.data, SH_ALLOCATOR_ACTION_ALLOC, 0, size, 0);
+    return allocator.func(allocator.data, SH_ALLOCATOR_ACTION_ALLOC, 0, size, NULL);
 }
 
 SH_BASE_DEF void *
@@ -358,7 +358,7 @@ sh_string_equal(ShString a, ShString b)
 SH_BASE_DEF ShString
 sh_string_concat_n(ShAllocator allocator, usize n, ...)
 {
-    ShString result = { 0, 0 };
+    ShString result = { 0, NULL };
     ShString *strings = sh_alloc_array(allocator, ShString, n);
 
     va_list args;

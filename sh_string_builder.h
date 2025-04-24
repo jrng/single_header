@@ -46,8 +46,8 @@ SH_STRING_BUILDER_DEF void
 sh_string_builder_init(ShStringBuilder *builder, ShAllocator allocator)
 {
     builder->allocator = allocator;
-    builder->first_buffer = 0;
-    builder->last_buffer = 0;
+    builder->first_buffer = NULL;
+    builder->last_buffer = NULL;
 }
 
 SH_STRING_BUILDER_DEF usize
@@ -71,7 +71,7 @@ _sh_string_builder_expand(ShStringBuilder *builder)
 {
     ShStringBuffer *new_buffer = sh_alloc_type(builder->allocator, ShStringBuffer);
 
-    new_buffer->next = 0;
+    new_buffer->next = NULL;
     new_buffer->occupied = 0;
 
     if (builder->last_buffer)
