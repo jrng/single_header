@@ -131,6 +131,30 @@ SH_HTTP_SERVER_DEF void sh_http_server_destroy(ShHttpServer *http_server);
 #  define INPUT_BUFFER_SIZE ShKiB(4)
 #  define ARENA_CAPACITY ShKiB(16)
 
+#  if SH_PLATFORM_UNIX
+
+static inline bool
+_sh_http_server_set_socket_non_blocking(int socket)
+{
+    int flags;
+
+    if ((flags = fcntl(socket, F_GETFL, 0)) < 0)
+    {
+        return false;
+    }
+
+    flags |= O_NONBLOCK;
+
+    if (fcntl(socket, F_SETFL, flags) != 0)
+    {
+        return false;
+    }
+
+    return true;
+}
+
+#  endif
+
 SH_HTTP_SERVER_DEF bool
 sh_http_server_create(ShHttpServer *http_server, ShAllocator allocator, uint16_t port, uint16_t max_client_count, ShHttpRequestCallback handle_request)
 {
@@ -158,17 +182,7 @@ sh_http_server_create(ShHttpServer *http_server, ShAllocator allocator, uint16_t
         return false;
     }
 
-    int flags;
-
-    if ((flags = fcntl(http_server->socket, F_GETFL, 0)) < 0)
-    {
-        close(http_server->socket);
-        return false;
-    }
-
-    flags |= O_NONBLOCK;
-
-    if (fcntl(http_server->socket, F_SETFL, flags) != 0)
+    if (!_sh_http_server_set_socket_non_blocking(http_server->socket))
     {
         close(http_server->socket);
         return false;
@@ -285,7 +299,8 @@ sh_http_server_run(ShHttpServer *http_server, bool wait_for_event)
 
             if (client_socket >= 0)
             {
-                if (http_server->client_count < http_server->max_client_count)
+                if (_sh_http_server_set_socket_non_blocking(client_socket) &&
+                    (http_server->client_count < http_server->max_client_count))
                 {
                     uint16_t client_index = http_server->client_count;
                     http_server->client_count += 1;
