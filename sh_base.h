@@ -98,9 +98,13 @@ typedef struct
 #  define ShStringArg(str) (int) (str).count, (str).data
 
 #  ifdef __cplusplus
+#    define ShStringEmpty ShString {}
 #    define ShStringLiteral(str) ShString { sizeof(str) - 1, (uint8_t *) (str) }
+#    define ShCString(str) ShString { sh_c_string_get_length(str), (uint8_t *) (str) }
 #  else
+#    define ShStringEmpty (ShString) { 0, NULL }
 #    define ShStringLiteral(str) (ShString) { sizeof(str) - 1, (uint8_t *) (str) }
+#    define ShCString(str) (ShString) { sh_c_string_get_length(str), (uint8_t *) (str) }
 #  endif
 
 typedef enum
@@ -168,12 +172,18 @@ SH_BASE_DEF void *sh_realloc(ShAllocator allocator, void *ptr, usize old_size, u
 SH_BASE_DEF void sh_free(ShAllocator allocator, void *ptr);
 
 SH_BASE_DEF bool sh_string_equal(ShString a, ShString b);
+SH_BASE_DEF bool sh_string_starts_with(ShString str, ShString prefix);
+SH_BASE_DEF bool sh_string_ends_with(ShString str, ShString suffix);
 
 SH_BASE_DEF ShString sh_string_concat_n(ShAllocator allocator, usize n, ...);
 
 SH_BASE_DEF ShString sh_string_trim(ShString str);
-SH_BASE_DEF ShString sh_string_split_left(ShString *str, uint8_t c);
-SH_BASE_DEF ShString sh_string_split_left_http_line(ShString *str);
+SH_BASE_DEF ShString sh_string_split_left(ShString *str, ShString split);
+SH_BASE_DEF ShString sh_string_split_left_on_char(ShString *str, uint8_t c);
+SH_BASE_DEF ShString sh_string_split_right(ShString *str, ShString split);
+SH_BASE_DEF ShString sh_string_split_right_on_char(ShString *str, uint8_t c);
+
+SH_BASE_DEF usize sh_c_string_get_length(const char *str);
 
 #endif // __SH_BASE_INCLUDE__
 
@@ -355,6 +365,36 @@ sh_string_equal(ShString a, ShString b)
     return true;
 }
 
+SH_BASE_DEF bool
+sh_string_starts_with(ShString str, ShString prefix)
+{
+    if (str.count < prefix.count)
+    {
+        return false;
+    }
+
+    ShString start;
+    start.count = prefix.count;
+    start.data  = str.data;
+
+    return sh_string_equal(start, prefix);
+}
+
+SH_BASE_DEF bool
+sh_string_ends_with(ShString str, ShString suffix)
+{
+    if (str.count < suffix.count)
+    {
+        return false;
+    }
+
+    ShString end;
+    end.count = suffix.count;
+    end.data  = str.data + (str.count - suffix.count);
+
+    return sh_string_equal(end, suffix);
+}
+
 SH_BASE_DEF ShString
 sh_string_concat_n(ShAllocator allocator, usize n, ...)
 {
@@ -413,7 +453,54 @@ sh_string_trim(ShString str)
 }
 
 SH_BASE_DEF ShString
-sh_string_split_left(ShString *str, uint8_t c)
+sh_string_split_left(ShString *str, ShString split)
+{
+    if (str->count < split.count)
+    {
+        ShString result;
+        result.count = str->count;
+        result.data  = str->data;
+        str->count   = 0;
+        str->data   += result.count;
+        return result;
+    }
+
+    usize index = 0;
+    usize end = str->count - split.count;
+
+    ShString start;
+    start.count = split.count;
+
+    while (index <= end)
+    {
+        start.data = str->data + index;
+
+        if (sh_string_equal(start, split))
+        {
+            break;
+        }
+
+        index += 1;
+    }
+
+    ShString result;
+    result.count = index;
+    result.data  = str->data;
+
+    str->count -= index;
+    str->data  += index;
+
+    if (index <= end)
+    {
+        str->count -= split.count;
+        str->data  += split.count;
+    }
+
+    return result;
+}
+
+SH_BASE_DEF ShString
+sh_string_split_left_on_char(ShString *str, uint8_t c)
 {
     usize index = 0;
 
@@ -429,54 +516,102 @@ sh_string_split_left(ShString *str, uint8_t c)
 
     ShString result;
     result.count = index;
-    result.data = str->data;
+    result.data  = str->data;
+
+    str->count -= index;
+    str->data  += index;
 
     if (index < str->count)
     {
-        str->count -= index + 1;
-        str->data += index + 1;
-    }
-    else
-    {
-        str->count -= index;
-        str->data += index;
+        str->count -= 1;
+        str->data  += 1;
     }
 
     return result;
 }
 
 SH_BASE_DEF ShString
-sh_string_split_left_http_line(ShString *str)
+sh_string_split_right(ShString *str, ShString split)
 {
-    usize index = 0;
-
-    while (index < str->count)
+    if (str->count < split.count)
     {
-        if ((str->data[index] == '\r') &&
-            ((index + 1) < str->count) &&
-            (str->data[index + 1] == '\n'))
+        ShString result;
+        result.count = str->count;
+        result.data  = str->data;
+        str->count   = 0;
+        return result;
+    }
+
+    usize index = str->count - split.count + 1;
+
+    ShString end;
+    end.count = split.count;
+
+    while (index > 0)
+    {
+        end.data = str->data + (index - 1);
+
+        if (sh_string_equal(end, split))
         {
             break;
         }
 
-        index += 1;
+        index -= 1;
+    }
+
+    usize diff = index + split.count - 1;
+
+    ShString result;
+    result.count = str->count - diff;
+    result.data  = str->data + diff;
+
+    str->count = index;
+
+    if (index > 0)
+    {
+        str->count -= 1;
+    }
+
+    return result;
+}
+
+SH_BASE_DEF ShString
+sh_string_split_right_on_char(ShString *str, uint8_t c)
+{
+    usize index = str->count;
+
+    while (index > 0)
+    {
+        if (str->data[index - 1] == c)
+        {
+            break;
+        }
+
+        index -= 1;
     }
 
     ShString result;
-    result.count = index;
-    result.data = str->data;
+    result.count = str->count - index;
+    result.data = str->data + index;
 
-    if (index < str->count)
+    str->count = index;
+
+    if (index > 0)
     {
-        str->count -= index + 2;
-        str->data += index + 2;
-    }
-    else
-    {
-        str->count -= index;
-        str->data += index;
+        str->count -= 1;
     }
 
+    return result;
+}
+
+SH_BASE_DEF usize
+sh_c_string_get_length(const char *str)
+{
+    usize result = 0;
+    if (str)
+    {
+        while (*str++) result += 1;
+    }
     return result;
 }
 

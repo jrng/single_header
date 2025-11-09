@@ -419,7 +419,7 @@ sh_http_server_run(ShHttpServer *http_server, bool wait_for_event)
 
                             while (value.count)
                             {
-                                ShString val = sh_string_trim(sh_string_split_left(&value, ','));
+                                ShString val = sh_string_trim(sh_string_split_left_on_char(&value, ','));
 
                                 if (sh_string_equal(val, ShStringLiteral("close")))
                                 {
@@ -537,10 +537,10 @@ sh_http_server_run(ShHttpServer *http_server, bool wait_for_event)
 SH_HTTP_SERVER_DEF bool
 sh_http_parse_request(ShHttpRequest *request, ShString request_string)
 {
-    ShString request_line = sh_string_split_left_http_line(&request_string);
+    ShString request_line = sh_string_split_left(&request_string, ShStringLiteral("\r\n"));
 
-    ShString request_method = sh_string_split_left(&request_line, ' ');
-    ShString request_uri = sh_string_split_left(&request_line, ' ');
+    ShString request_method = sh_string_split_left_on_char(&request_line, ' ');
+    ShString request_uri = sh_string_split_left_on_char(&request_line, ' ');
     ShString protocol_version = request_line;
 
     request->method = SH_HTTP_REQUEST_METHOD_GET;
@@ -606,14 +606,14 @@ sh_http_parse_request(ShHttpRequest *request, ShString request_string)
 
     for (;;)
     {
-        ShString header_field = sh_string_split_left_http_line(&request_string);
+        ShString header_field = sh_string_split_left(&request_string, ShStringLiteral("\r\n"));
 
         if (header_field.count == 0)
         {
             break;
         }
 
-        ShString field_name = sh_string_split_left(&header_field, ':');
+        ShString field_name = sh_string_split_left_on_char(&header_field, ':');
         ShString field_value = header_field;
 
         if ((field_value.count > 0) && (field_value.data[0] == ' '))
