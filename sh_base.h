@@ -171,6 +171,8 @@ SH_BASE_DEF void *sh_alloc(ShAllocator allocator, usize size);
 SH_BASE_DEF void *sh_realloc(ShAllocator allocator, void *ptr, usize old_size, usize size);
 SH_BASE_DEF void sh_free(ShAllocator allocator, void *ptr);
 
+SH_BASE_DEF ShString sh_copy_string(ShAllocator allocator, ShString str);
+
 SH_BASE_DEF bool sh_string_equal(ShString a, ShString b);
 SH_BASE_DEF bool sh_string_starts_with(ShString str, ShString prefix);
 SH_BASE_DEF bool sh_string_ends_with(ShString str, ShString suffix);
@@ -344,6 +346,28 @@ SH_BASE_DEF void
 sh_free(ShAllocator allocator, void *ptr)
 {
     allocator.func(allocator.data, SH_ALLOCATOR_ACTION_FREE, 0, 0, ptr);
+}
+
+SH_BASE_DEF ShString
+sh_copy_string(ShAllocator allocator, ShString str)
+{
+    ShString result = ShStringEmpty;
+
+    if (str.count > 0)
+    {
+        result.count = str.count;
+        result.data  = sh_alloc_array(allocator, uint8_t, result.count);
+
+        uint8_t *src = str.data;
+        uint8_t *dst = result.data;
+
+        while (str.count--)
+        {
+            *dst++ = *src++;
+        }
+    }
+
+    return result;
 }
 
 SH_BASE_DEF bool
