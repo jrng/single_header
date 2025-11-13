@@ -37,6 +37,7 @@ SH_STRING_BUILDER_DEF void sh_string_builder_append_string(ShStringBuilder *buil
 SH_STRING_BUILDER_DEF void sh_string_builder_append_number(ShStringBuilder *builder, uint64_t value,
                                                            usize leading_character_count, uint8_t leading_character,
                                                            uint64_t base, bool uppercase_digits);
+SH_STRING_BUILDER_DEF ShString sh_string_builder_to_string(ShStringBuilder *builder, ShAllocator allocator);
 
 #endif // __SH_STRING_BUILDER_INCLUDE__
 
@@ -182,6 +183,36 @@ sh_string_builder_append_number(ShStringBuilder *builder, uint64_t value, usize 
     str.data = buffer + index + 1;
 
     sh_string_builder_append_string(builder, str);
+}
+
+SH_STRING_BUILDER_DEF ShString
+sh_string_builder_to_string(ShStringBuilder *builder, ShAllocator allocator)
+{
+    ShString result;
+
+    result.count = sh_string_builder_get_size(builder);
+    result.data = NULL;
+
+    if (result.count > 0)
+    {
+        result.data = sh_alloc_array(allocator, uint8_t, result.count);
+
+        uint8_t *dst = result.data;
+
+        ShStringBuffer *buffer = builder->first_buffer;
+
+        while (buffer)
+        {
+            uint8_t *src = buffer->data;
+            usize count = buffer->occupied;
+
+            while (count--) *dst++ = *src++;
+
+            buffer = buffer->next;
+        }
+    }
+
+    return result;
 }
 
 #endif // SH_STRING_BUILDER_IMPLEMENTATION
