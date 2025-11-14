@@ -105,8 +105,6 @@ typedef struct
     void *allocation;
     ShAllocator allocator;
 
-    ShArena arena;
-
     ShHttpRequestCallback handle_request;
 
 #  if SH_PLATFORM_UNIX
@@ -117,7 +115,7 @@ typedef struct
 // Creates an http server and starts listening to the given port.
 SH_HTTP_SERVER_DEF bool sh_http_server_create(ShHttpServer *http_server, ShAllocator allocator, uint16_t port, uint16_t max_client_count, ShHttpRequestCallback handle_request);
 
-SH_HTTP_SERVER_DEF void sh_http_server_run(ShHttpServer *http_server, bool wait_for_event);
+SH_HTTP_SERVER_DEF void sh_http_server_run(ShThreadContext *thread_context, ShHttpServer *http_server, bool wait_for_event);
 
 SH_HTTP_SERVER_DEF bool sh_http_parse_request(ShHttpRequest *request, ShString request_string);
 
@@ -219,9 +217,9 @@ sh_http_server_create(ShHttpServer *http_server, ShAllocator allocator, uint16_t
     http_server->max_client_count = max_client_count;
     http_server->handle_request = handle_request;
 
-    usize clients_size       =  max_client_count      * sizeof(ShHttpClient);
-    usize input_buffers_size =  max_client_count      * INPUT_BUFFER_SIZE;
-    usize arenas_size        = (max_client_count + 1) * ARENA_CAPACITY;
+    usize clients_size       = max_client_count * sizeof(ShHttpClient);
+    usize input_buffers_size = max_client_count * INPUT_BUFFER_SIZE;
+    usize arenas_size        = max_client_count * ARENA_CAPACITY;
 
     usize total_size = clients_size + input_buffers_size + arenas_size;
 
@@ -232,10 +230,6 @@ sh_http_server_create(ShHttpServer *http_server, ShAllocator allocator, uint16_t
 
     http_server->clients = (ShHttpClient *) ptr;
     ptr += clients_size;
-
-    // TODO: use smaller arena for global
-    sh_arena_init_with_memory(&http_server->arena, ptr, ARENA_CAPACITY);
-    ptr += ARENA_CAPACITY;
 
     for (uint16_t i = 0; i < http_server->max_client_count; i += 1)
     {
@@ -253,18 +247,17 @@ sh_http_server_create(ShHttpServer *http_server, ShAllocator allocator, uint16_t
 }
 
 SH_HTTP_SERVER_DEF void
-sh_http_server_run(ShHttpServer *http_server, bool wait_for_event)
+sh_http_server_run(ShThreadContext *thread_context, ShHttpServer *http_server, bool wait_for_event)
 {
-    sh_arena_clear(&http_server->arena);
-    ShAllocator temp_allocator = sh_arena_get_allocator(&http_server->arena);
+    ShTemporaryMemory temp_memory = sh_begin_temporary_memory(thread_context, 0, NULL);
 
     uint16_t *clients_to_delete = NULL;
-    sh_array_init(clients_to_delete, 4, temp_allocator);
+    sh_array_init(clients_to_delete, 4, temp_memory.allocator);
 
     uint16_t current_client_count = http_server->client_count;
 
 #  if SH_PLATFORM_UNIX
-    struct pollfd *sockets = sh_alloc_array(temp_allocator, struct pollfd, current_client_count + 1);
+    struct pollfd *sockets = sh_alloc_array(temp_memory.allocator, struct pollfd, current_client_count + 1);
 
     sockets[0].fd      = http_server->socket;
     sockets[0].events  = POLLIN;
@@ -438,9 +431,9 @@ sh_http_server_run(ShHttpServer *http_server, bool wait_for_event)
                                         ShString websocket_key = websocket_key_field->value;
                                         ShString websocket_magic = ShStringLiteral("258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
 
-                                        ShString websocket_concat = sh_string_concat_n(temp_allocator, 2, websocket_key, websocket_magic);
+                                        ShString websocket_concat = sh_string_concat_n(thread_context, temp_memory.allocator, 2, websocket_key, websocket_magic);
                                         ShSha1 websocket_sha1 = sh_hash_sha1(websocket_concat.count, websocket_concat.data);
-                                        ShString websocket_accept = sh_base64_encode(temp_allocator, ShArrayCount(websocket_sha1.hash), websocket_sha1.hash);
+                                        ShString websocket_accept = sh_base64_encode(temp_memory.allocator, ShArrayCount(websocket_sha1.hash), websocket_sha1.hash);
 
                                         sh_string_builder_append_string(&client->output_builder, ShStringLiteral("HTTP/1.1 101 Switching Protocols\r\n"));
                                         sh_string_builder_append_string(&client->output_builder, ShStringLiteral("Upgrade: websocket\r\n"));
@@ -532,6 +525,8 @@ sh_http_server_run(ShHttpServer *http_server, bool wait_for_event)
             http_server->clients[index] = http_server->clients[http_server->client_count];
         }
     }
+
+    sh_end_temporary_memory(temp_memory);
 }
 
 SH_HTTP_SERVER_DEF bool

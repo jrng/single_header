@@ -127,10 +127,22 @@ typedef struct
 
 typedef struct
 {
+    ShAllocator allocator;
+    usize saved_occupied;
+} ShTemporaryMemory;
+
+typedef struct
+{
     uint8_t *base;
     usize capacity;
     usize occupied;
 } ShArena;
+
+typedef struct
+{
+    ShAllocator allocator;
+    ShArena temporary_arenas[2];
+} ShThreadContext;
 
 typedef struct
 {
@@ -171,13 +183,19 @@ SH_BASE_DEF void *sh_alloc(ShAllocator allocator, usize size);
 SH_BASE_DEF void *sh_realloc(ShAllocator allocator, void *ptr, usize old_size, usize size);
 SH_BASE_DEF void sh_free(ShAllocator allocator, void *ptr);
 
+SH_BASE_DEF ShThreadContext *sh_thread_context_create(ShAllocator allocator, usize temporary_memory_size);
+SH_BASE_DEF void sh_thread_context_destroy(ShThreadContext *thread_context);
+
+SH_BASE_DEF ShTemporaryMemory sh_begin_temporary_memory(ShThreadContext *thread_context, usize conflict_count, ShAllocator *conflicts);
+SH_BASE_DEF void sh_end_temporary_memory(ShTemporaryMemory temporary_memory);
+
 SH_BASE_DEF ShString sh_copy_string(ShAllocator allocator, ShString str);
 
 SH_BASE_DEF bool sh_string_equal(ShString a, ShString b);
 SH_BASE_DEF bool sh_string_starts_with(ShString str, ShString prefix);
 SH_BASE_DEF bool sh_string_ends_with(ShString str, ShString suffix);
 
-SH_BASE_DEF ShString sh_string_concat_n(ShAllocator allocator, usize n, ...);
+SH_BASE_DEF ShString sh_string_concat_n(ShThreadContext *thread_context, ShAllocator allocator, usize n, ...);
 
 SH_BASE_DEF ShString sh_string_trim(ShString str);
 SH_BASE_DEF ShString sh_string_split_left(ShString *str, ShString split);
@@ -348,6 +366,82 @@ sh_free(ShAllocator allocator, void *ptr)
     allocator.func(allocator.data, SH_ALLOCATOR_ACTION_FREE, 0, 0, ptr);
 }
 
+SH_BASE_DEF ShThreadContext *
+sh_thread_context_create(ShAllocator allocator, usize temporary_memory_size)
+{
+    usize thread_context_size = sizeof(ShThreadContext);
+    usize allocation_size = thread_context_size + (ShArrayCount(((ShThreadContext *) NULL)->temporary_arenas) * temporary_memory_size);
+
+    uint8_t *allocation = (uint8_t *) sh_alloc(allocator, allocation_size);
+
+    ShThreadContext *thread_context = (ShThreadContext *) allocation;
+    allocation += thread_context_size;
+
+    thread_context->allocator = allocator;
+
+    for (usize i = 0; i < ShArrayCount(thread_context->temporary_arenas); i += 1)
+    {
+        sh_arena_init_with_memory(thread_context->temporary_arenas + i, allocation, temporary_memory_size);
+        allocation += temporary_memory_size;
+    }
+
+    return thread_context;
+}
+
+SH_BASE_DEF void
+sh_thread_context_destroy(ShThreadContext *thread_context)
+{
+    sh_free(thread_context->allocator, thread_context);
+}
+
+SH_BASE_DEF ShTemporaryMemory
+sh_begin_temporary_memory(ShThreadContext *thread_context, usize conflict_count, ShAllocator *conflicts)
+{
+    ShTemporaryMemory temporary_memory;
+    temporary_memory.allocator.data = NULL;
+    temporary_memory.allocator.func = NULL;
+    temporary_memory.saved_occupied = 0;
+
+    ShArena *temporary_arena = NULL;
+
+    for (usize i = 0; i < ShArrayCount(thread_context->temporary_arenas); i += 1)
+    {
+        ShArena *arena = thread_context->temporary_arenas + i;
+        bool has_conflict = false;
+
+        for (usize j = 0; j < conflict_count; j += 1)
+        {
+            if (arena == (ShArena *) conflicts[j].data)
+            {
+                has_conflict = true;
+                break;
+            }
+        }
+
+        if (!has_conflict)
+        {
+            temporary_arena = arena;
+            break;
+        }
+    }
+
+    if (temporary_arena)
+    {
+        temporary_memory.allocator = sh_arena_get_allocator(temporary_arena);
+        temporary_memory.saved_occupied = temporary_arena->occupied;
+    }
+
+    return temporary_memory;
+}
+
+SH_BASE_DEF void
+sh_end_temporary_memory(ShTemporaryMemory temporary_memory)
+{
+    ShArena *arena = (ShArena *) temporary_memory.allocator.data;
+    assert(arena->occupied >= temporary_memory.saved_occupied);
+    arena->occupied = temporary_memory.saved_occupied;
+}
+
 SH_BASE_DEF ShString
 sh_copy_string(ShAllocator allocator, ShString str)
 {
@@ -420,10 +514,12 @@ sh_string_ends_with(ShString str, ShString suffix)
 }
 
 SH_BASE_DEF ShString
-sh_string_concat_n(ShAllocator allocator, usize n, ...)
+sh_string_concat_n(ShThreadContext *thread_context, ShAllocator allocator, usize n, ...)
 {
+    ShTemporaryMemory temp_memory = sh_begin_temporary_memory(thread_context, 1, &allocator);
+
     ShString result = { 0, NULL };
-    ShString *strings = sh_alloc_array(allocator, ShString, n);
+    ShString *strings = sh_alloc_array(temp_memory.allocator, ShString, n);
 
     va_list args;
     va_start(args, n);
@@ -450,7 +546,7 @@ sh_string_concat_n(ShAllocator allocator, usize n, ...)
         }
     }
 
-    sh_free(allocator, strings);
+    sh_end_temporary_memory(temp_memory);
 
     return result;
 }

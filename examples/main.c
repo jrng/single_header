@@ -1,6 +1,5 @@
 // cc -std=c99 -o main main.c
 #define SH_IMPLEMENTATION
-#define SH_STATIC
 #include "sh.h"
 
 #include <stdio.h>

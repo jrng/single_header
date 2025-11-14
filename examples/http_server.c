@@ -1,5 +1,3 @@
-#define SH_STATIC
-
 #define SH_BASE_IMPLEMENTATION
 #include "sh_base.h"
 #define SH_HASH_IMPLEMENTATION
@@ -70,12 +68,15 @@ int main(void)
         return -1;
     }
 
+    ShThreadContext *thread_context = sh_thread_context_create(allocator, ShMiB(1));
+
     while (true)
     {
-        sh_http_server_run(&http_server, true);
+        sh_http_server_run(thread_context, &http_server, true);
     }
 
     sh_http_server_destroy(&http_server);
+    sh_thread_context_destroy(thread_context);
 
     return 0;
 }
