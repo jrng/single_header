@@ -511,14 +511,14 @@ sh_string_split_left(ShString *str, ShString split)
     result.count = index;
     result.data  = str->data;
 
-    str->count -= index;
-    str->data  += index;
-
     if (index <= end)
     {
         str->count -= split.count;
         str->data  += split.count;
     }
+
+    str->count -= index;
+    str->data  += index;
 
     return result;
 }
@@ -542,14 +542,14 @@ sh_string_split_left_on_char(ShString *str, uint8_t c)
     result.count = index;
     result.data  = str->data;
 
-    str->count -= index;
-    str->data  += index;
-
     if (index < str->count)
     {
         str->count -= 1;
         str->data  += 1;
     }
+
+    str->count -= index;
+    str->data  += index;
 
     return result;
 }
