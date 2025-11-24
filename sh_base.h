@@ -97,6 +97,8 @@ typedef struct
 #  define ShStringFmt ".*s"
 #  define ShStringArg(str) (int) (str).count, (str).data
 
+#  define ShStringConstant(str) { sizeof(str) - 1, (uint8_t *) (str) }
+
 #  ifdef __cplusplus
 #    define ShStringEmpty ShString {}
 #    define ShStringLiteral(str) ShString { sizeof(str) - 1, (uint8_t *) (str) }
