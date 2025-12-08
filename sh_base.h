@@ -192,6 +192,7 @@ SH_BASE_DEF ShTemporaryMemory sh_begin_temporary_memory(ShThreadContext *thread_
 SH_BASE_DEF void sh_end_temporary_memory(ShTemporaryMemory temporary_memory);
 
 SH_BASE_DEF ShString sh_copy_string(ShAllocator allocator, ShString str);
+SH_BASE_DEF char *sh_string_to_c_string(ShAllocator allocator, ShString str);
 
 SH_BASE_DEF bool sh_string_equal(ShString a, ShString b);
 SH_BASE_DEF bool sh_string_starts_with(ShString str, ShString prefix);
@@ -204,6 +205,8 @@ SH_BASE_DEF ShString sh_string_split_left(ShString *str, ShString split);
 SH_BASE_DEF ShString sh_string_split_left_on_char(ShString *str, uint8_t c);
 SH_BASE_DEF ShString sh_string_split_right(ShString *str, ShString split);
 SH_BASE_DEF ShString sh_string_split_right_on_char(ShString *str, uint8_t c);
+
+SH_BASE_DEF bool sh_parse_integer(ShString *str, int64_t *value);
 
 SH_BASE_DEF usize sh_c_string_get_length(const char *str);
 
@@ -466,6 +469,21 @@ sh_copy_string(ShAllocator allocator, ShString str)
     return result;
 }
 
+SH_BASE_DEF char *
+sh_string_to_c_string(ShAllocator allocator, ShString str)
+{
+    char *result = sh_alloc_array(allocator, char, str.count + 1);
+
+    for (size_t i = 0; i < str.count; i += 1)
+    {
+        result[i] = str.data[i];
+    }
+
+    result[str.count] = 0;
+
+    return result;
+}
+
 SH_BASE_DEF bool
 sh_string_equal(ShString a, ShString b)
 {
@@ -724,6 +742,42 @@ sh_string_split_right_on_char(ShString *str, uint8_t c)
     }
 
     return result;
+}
+
+SH_BASE_DEF bool
+sh_parse_integer(ShString *str, int64_t *value)
+{
+    size_t index = 0;
+    bool has_sign = false;
+
+    if ((index < str->count) && (str->data[index] == '-'))
+    {
+        has_sign = true;
+        index += 1;
+    }
+
+    if ((index >= str->count) || (str->data[index] < '0') || (str->data[index] > '9'))
+    {
+        return false;
+    }
+
+    *value = 0;
+
+    while ((index < str->count) && (str->data[index] >= '0') && (str->data[index] <= '9'))
+    {
+        *value = (10 * *value) + (str->data[index] - '0');
+        index += 1;
+    }
+
+    if (has_sign)
+    {
+        *value = -*value;
+    }
+
+    str->count -= index;
+    str->data  += index;
+
+    return true;
 }
 
 SH_BASE_DEF usize
