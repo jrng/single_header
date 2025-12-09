@@ -109,6 +109,12 @@ typedef struct
 #    define ShCString(str) (ShString) { sh_c_string_get_length(str), (uint8_t *) (str) }
 #  endif
 
+typedef struct
+{
+    uint32_t codepoint;
+    uint32_t byte_count;
+} ShUnicodeResult;
+
 typedef enum
 {
     SH_ALLOCATOR_ACTION_ALLOC   = 0,
@@ -209,6 +215,13 @@ SH_BASE_DEF ShString sh_string_split_right_on_char(ShString *str, uint8_t c);
 SH_BASE_DEF bool sh_parse_integer(ShString *str, int64_t *value);
 
 SH_BASE_DEF usize sh_c_string_get_length(const char *str);
+
+SH_BASE_DEF ShUnicodeResult sh_utf8_decode(ShString str, usize index);
+SH_BASE_DEF usize sh_utf8_encode(ShString str, usize index, uint32_t codepoint);
+SH_BASE_DEF ShUnicodeResult sh_utf16le_decode(ShString str, usize index);
+SH_BASE_DEF usize sh_utf16le_encode(ShString str, usize index, uint32_t codepoint);
+SH_BASE_DEF ShString sh_string_utf8_to_utf16le(ShAllocator allocator, ShString utf8_str);
+SH_BASE_DEF ShString sh_string_utf16le_to_utf8(ShAllocator allocator, ShString utf16_str);
 
 #endif // __SH_BASE_INCLUDE__
 
@@ -472,14 +485,15 @@ sh_copy_string(ShAllocator allocator, ShString str)
 SH_BASE_DEF char *
 sh_string_to_c_string(ShAllocator allocator, ShString str)
 {
-    char *result = sh_alloc_array(allocator, char, str.count + 1);
+    char *result = sh_alloc_array(allocator, char, str.count + 2);
 
     for (size_t i = 0; i < str.count; i += 1)
     {
         result[i] = str.data[i];
     }
 
-    result[str.count] = 0;
+    result[str.count - 1] = 0;
+    result[str.count - 0] = 0;
 
     return result;
 }
@@ -788,6 +802,216 @@ sh_c_string_get_length(const char *str)
     {
         while (*str++) result += 1;
     }
+    return result;
+}
+
+SH_BASE_DEF ShUnicodeResult
+sh_utf8_decode(ShString str, usize index)
+{
+    ShUnicodeResult result = { '?', 1 };
+
+    if (index < str.count)
+    {
+        uint8_t c = str.data[index];
+
+        if ((c & 0x80) == 0x00)
+        {
+            result.codepoint = (c & 0x7F);
+        }
+        else if (((c & 0xE0) == 0xC0) && ((index + 1) < str.count) &&
+                 ((str.data[index + 1] & 0xC0) == 0x80))
+        {
+            result.codepoint = ((uint32_t) (c & 0x1F) << 6) |
+                                (uint32_t) (str.data[index + 1] & 0x3F);
+            result.byte_count = 2;
+        }
+        else if (((c & 0xF0) == 0xE0) && ((index + 2) < str.count) &&
+                 ((str.data[index + 1] & 0xC0) == 0x80) &&
+                 ((str.data[index + 2] & 0xC0) == 0x80))
+        {
+            result.codepoint = ((uint32_t) (c & 0x0F) << 12) |
+                               ((uint32_t) (str.data[index + 1] & 0x3F) << 6) |
+                                (uint32_t) (str.data[index + 2] & 0x3F);
+            result.byte_count = 3;
+        }
+        else if (((c & 0xF8) == 0xF0) && ((index + 3) < str.count) &&
+                 ((str.data[index + 1] & 0xC0) == 0x80) &&
+                 ((str.data[index + 2] & 0xC0) == 0x80) &&
+                 ((str.data[index + 3] & 0xC0) == 0x80))
+        {
+            result.codepoint = ((uint32_t) (c & 0x0F) << 18) |
+                               ((uint32_t) (str.data[index + 1] & 0x3F) << 12) |
+                               ((uint32_t) (str.data[index + 2] & 0x3F) << 6) |
+                                (uint32_t) (str.data[index + 3] & 0x3F);
+            result.byte_count = 4;
+        }
+    }
+
+    return result;
+}
+
+SH_BASE_DEF usize
+sh_utf8_encode(ShString str, usize index, uint32_t codepoint)
+{
+    if (codepoint < 0x80)
+    {
+        if (index < str.count)
+        {
+            str.data[index] = (uint8_t) codepoint;
+
+            return 1;
+        }
+    }
+    else if (codepoint < 0x800)
+    {
+        if ((index + 1) < str.count)
+        {
+            str.data[index + 0] = 0xC0 | (uint8_t) ((codepoint >>  6) & 0x1F);
+            str.data[index + 1] = 0x80 | (uint8_t) ( codepoint        & 0x3F);
+
+            return 2;
+        }
+    }
+    else if (codepoint < 0x10000)
+    {
+        if ((index + 2) < str.count)
+        {
+            str.data[index + 0] = 0xE0 | (uint8_t) ((codepoint >> 12) & 0x0F);
+            str.data[index + 1] = 0x80 | (uint8_t) ((codepoint >>  6) & 0x3F);
+            str.data[index + 2] = 0x80 | (uint8_t) ( codepoint        & 0x3F);
+
+            return 3;
+        }
+    }
+    else if (codepoint < 0x110000)
+    {
+        if ((index + 3) < str.count)
+        {
+            str.data[index + 0] = 0xF0 | (uint8_t) ((codepoint >> 18) & 0x07);
+            str.data[index + 1] = 0x80 | (uint8_t) ((codepoint >> 12) & 0x3F);
+            str.data[index + 2] = 0x80 | (uint8_t) ((codepoint >>  6) & 0x3F);
+            str.data[index + 3] = 0x80 | (uint8_t) ( codepoint        & 0x3F);
+
+            return 4;
+        }
+    }
+
+    return 0;
+}
+
+SH_BASE_DEF ShUnicodeResult
+sh_utf16le_decode(ShString str, usize index)
+{
+    ShUnicodeResult result = { '?', 2 };
+
+    if ((index + 1) < str.count)
+    {
+        uint16_t leading = (str.data[index + 1] << 8) | str.data[index + 0];
+
+        if (((leading & 0xFC00) == 0xD800) && ((index + 3) < str.count))
+        {
+            uint16_t trailing = (str.data[index + 3] << 8) | str.data[index + 2];
+
+            result.codepoint = (((uint32_t) (leading & 0x3FF) << 10) |
+                                 (uint32_t) (trailing & 0x3FF)) + 0x10000;
+            result.byte_count = 4;
+        }
+        else
+        {
+            result.codepoint = leading;
+            result.byte_count = 2;
+        }
+    }
+
+    return result;
+}
+
+SH_BASE_DEF usize
+sh_utf16le_encode(ShString str, usize index, uint32_t codepoint)
+{
+    if ((codepoint < 0xD800) || ((codepoint >= 0xE000) && (codepoint < 0x10000)))
+    {
+        if ((index + 1) < str.count)
+        {
+            str.data[index + 0] = (uint8_t) ( codepoint       & 0xFF);
+            str.data[index + 1] = (uint8_t) ((codepoint >> 8) & 0xFF);
+        }
+
+        return 2;
+    }
+    else if ((codepoint >= 0x10000) && (codepoint < 0x110000))
+    {
+        if ((index + 3) < str.count)
+        {
+            codepoint -= 0x10000;
+            uint32_t leading  = 0xD800 | ((codepoint >> 10) & 0x3FF);
+            uint32_t trailing = 0xDC00 | ( codepoint        & 0x3FF);
+
+            str.data[index + 0] = (uint8_t) ( leading       & 0xFF);
+            str.data[index + 1] = (uint8_t) ((leading >> 8) & 0xFF);
+            str.data[index + 2] = (uint8_t) ( trailing       & 0xFF);
+            str.data[index + 3] = (uint8_t) ((trailing >> 8) & 0xFF);
+        }
+
+        return 4;
+    }
+
+    return 0;
+}
+
+SH_BASE_DEF ShString
+sh_string_utf8_to_utf16le(ShAllocator allocator, ShString utf8_str)
+{
+    ShString result = ShStringEmpty;
+
+    if (utf8_str.count)
+    {
+        result.count = 2 * utf8_str.count;
+        result.data = sh_alloc_array(allocator, uint8_t, result.count);
+
+        usize src_index = 0;
+        usize dst_index = 0;
+
+        while (src_index < utf8_str.count)
+        {
+            ShUnicodeResult utf8 = sh_utf8_decode(utf8_str, src_index);
+            dst_index += sh_utf16le_encode(result, dst_index, utf8.codepoint);
+            src_index += utf8.byte_count;
+        }
+
+        assert(dst_index <= result.count);
+
+        result.count = dst_index;
+    }
+
+    return result;
+}
+
+SH_BASE_DEF ShString
+sh_string_utf16le_to_utf8(ShAllocator allocator, ShString utf16_str)
+{
+    ShString result = ShStringEmpty;
+
+    if (utf16_str.count)
+    {
+        result.count = 2 * utf16_str.count;
+        result.data = sh_alloc_array(allocator, uint8_t, result.count);
+
+        usize src_index = 0;
+        usize dst_index = 0;
+
+        while (src_index < utf16_str.count)
+        {
+            ShUnicodeResult utf16 = sh_utf16le_decode(utf16_str, src_index);
+            dst_index += sh_utf8_encode(result, dst_index, utf16.codepoint);
+            src_index += utf16.byte_count;
+        }
+
+        assert(dst_index <= result.count);
+
+        result.count = dst_index;
+    }
+
     return result;
 }
 
