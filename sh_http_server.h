@@ -20,7 +20,7 @@
 
 #  if SH_PLATFORM_WINDOWS
 
-#    include <winsock2.h>
+// winsock2.h gets included in sh_base.h. See sh_base.h for details.
 
 #    if !defined(__MINGW32__)
 #      pragma comment(lib, "Ws2_32")

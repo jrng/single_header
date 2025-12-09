@@ -40,6 +40,13 @@
 #  include <stdint.h>
 #  include <stdbool.h>
 
+#  if SH_PLATFORM_WINDOWS
+// winsock2.h needs to be included before windows.h and as sh_base.h is the first header
+// of these libraries to get included we have to do it here. Maybe we can come up with a
+// workaround to not include this if you are not using sh_http_server.h.
+#    include <winsock2.h>
+#  endif
+
 #  if defined(SH_STATIC) || defined(SH_BASE_STATIC)
 #    define SH_BASE_DEF static
 #  else
