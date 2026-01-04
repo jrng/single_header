@@ -510,8 +510,8 @@ sh_string_to_c_string(ShAllocator allocator, ShString str)
         result[i] = str.data[i];
     }
 
-    result[str.count - 1] = 0;
-    result[str.count - 0] = 0;
+    result[str.count + 0] = 0;
+    result[str.count + 1] = 0;
 
     return result;
 }
