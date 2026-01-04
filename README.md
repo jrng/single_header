@@ -13,9 +13,12 @@ If you don't care or just want all you can also just include `sh.h`.
 ```
                                     sh_base.h
                                         │
-       ╭─────────────────────┬──────────┴──────────┬─────────────────────╮
-       │                     │                     │                     │
-   sh_hash.sh        sh_string_builder.h       sh_base64.h         sh_platform.h
+       ╭─────────────────────┬──────────┴──────────╮
+       │                     │                     │
+   sh_hash.sh        sh_string_builder.h       sh_base64.h
+       │                     │                     │
+       │                     ├─────────╮           │
+       │                     │   sh_platform.h     │
        │                     │                     │
        ╰─────────────────────┼─────────────────────╯
                              │

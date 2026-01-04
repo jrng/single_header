@@ -5,16 +5,16 @@
 #  define SH_BASE_IMPLEMENTATION
 #  define SH_HASH_IMPLEMENTATION
 #  define SH_BASE64_IMPLEMENTATION
-#  define SH_PLATFORM_IMPLEMENTATION
 #  define SH_STRING_BUILDER_IMPLEMENTATION
+#  define SH_PLATFORM_IMPLEMENTATION
 #  define SH_HTTP_SERVER_IMPLEMENTATION
 #endif // SH_IMPLEMENTATION
 
 #include "sh_base.h"
 #include "sh_hash.h"
 #include "sh_base64.h"
-#include "sh_platform.h"
 #include "sh_string_builder.h"
+#include "sh_platform.h"
 #include "sh_http_server.h"
 
 /*

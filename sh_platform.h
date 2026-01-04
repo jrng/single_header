@@ -8,6 +8,10 @@
 #    error "sh_platform.h requires sh_base.h to be included first"
 #  endif
 
+#  ifndef __SH_STRING_BUILDER_INCLUDE__
+#    error "sh_platform.h requires sh_string_builder.h to be included first"
+#  endif
+
 #  if SH_PLATFORM_WINDOWS
 
 #    define NOMINMAX
@@ -30,6 +34,7 @@
 #  endif
 
 SH_PLATFORM_DEF bool sh_read_entire_file(ShThreadContext *thread_context, ShAllocator allocator, ShString filename, ShString *content);
+SH_PLATFORM_DEF bool sh_write_entire_file(ShThreadContext *thread_context, ShString filename, ShStringBuilder *content);
 
 #endif // __SH_PLATFORM_INCLUDE__
 
@@ -81,6 +86,7 @@ sh_read_entire_file(ShThreadContext *thread_context, ShAllocator allocator, ShSt
 
     sh_end_temporary_memory(temp_memory);
     CloseHandle(file);
+
     return true;
 #  elif SH_PLATFORM_UNIX
     ShTemporaryMemory temp_memory = sh_begin_temporary_memory(thread_context, 1, &allocator);
@@ -123,6 +129,93 @@ sh_read_entire_file(ShThreadContext *thread_context, ShAllocator allocator, ShSt
     }
 
     sh_end_temporary_memory(temp_memory);
+    close(fd);
+
+    return true;
+#  else
+    return false;
+#  endif
+}
+
+SH_PLATFORM_DEF bool
+sh_write_entire_file(ShThreadContext *thread_context, ShString filename, ShStringBuilder *content)
+{
+#  if SH_PLATFORM_WINDOWS
+    ShTemporaryMemory temp_memory = sh_begin_temporary_memory(thread_context, 0, NULL);
+
+    LPWSTR utf16_filename = (LPWSTR) sh_string_to_c_string(temp_memory.allocator, sh_string_utf8_to_utf16le(temp_memory.allocator, filename));
+    HANDLE file = CreateFileW(utf16_filename, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
+
+    sh_end_temporary_memory(temp_memory);
+
+    if (file == INVALID_HANDLE_VALUE)
+    {
+        return false;
+    }
+
+    ShStringBuffer *buffer = content->first_buffer;
+
+    while (buffer)
+    {
+        uint8_t *src = buffer->data;
+        usize count = buffer->occupied;
+
+        while (count)
+        {
+            DWORD bytes_written = 0;
+
+            if (!WriteFile(file, src, count, &bytes_written, 0))
+            {
+                CloseHandle(file);
+                return false;
+            }
+
+            src += bytes_written;
+            count -= bytes_written;
+        }
+
+        buffer = buffer->next;
+    }
+
+    CloseHandle(file);
+
+    return true;
+#  elif SH_PLATFORM_UNIX
+    ShTemporaryMemory temp_memory = sh_begin_temporary_memory(thread_context, 0, NULL);
+
+    int fd = open(sh_string_to_c_string(temp_memory.allocator, filename),  O_WRONLY | O_TRUNC | O_CREAT, 0664);
+
+    sh_end_temporary_memory(temp_memory);
+
+    if (fd < 0)
+    {
+        return false;
+    }
+
+    ShStringBuffer *buffer = content->first_buffer;
+
+    while (buffer)
+    {
+        uint8_t *src = buffer->data;
+        usize count = buffer->occupied;
+
+        while (count)
+        {
+            ssize bytes_written = write(fd, src, count);
+
+            if (bytes_written < 0)
+            {
+                close(fd);
+                return false;
+            }
+
+            src += bytes_written;
+            count -= bytes_written;
+        }
+
+        buffer = buffer->next;
+    }
+
     close(fd);
 
     return true;
