@@ -473,9 +473,7 @@ sh_http_server_run(ShThreadContext *thread_context, ShHttpServer *http_server, b
                             sh_string_builder_append_string(&client->output_builder, ShStringLiteral("HTTP/1.1 500 Internal Server Error\r\n"));
                             sh_string_builder_append_string(&client->output_builder, ShStringLiteral("Server: ShHttpServer\r\n"));
                             sh_string_builder_append_string(&client->output_builder, ShStringLiteral("Content-Type: text/html; charset=utf-8\r\n"));
-                            sh_string_builder_append_string(&client->output_builder, ShStringLiteral("Content-Length: "));
-                            sh_string_builder_append_number(&client->output_builder, body.count, 0, '0', 10, false);
-                            sh_string_builder_append_string(&client->output_builder, ShStringLiteral("\r\n"));
+                            sh_string_builder_append_formated(&client->output_builder, ShStringLiteral("Content-Length: %zu\r\n"), body.count);
                             sh_string_builder_append_string(&client->output_builder, ShStringLiteral("\r\n"));
                             sh_string_builder_append_string(&client->output_builder, body);
                         }

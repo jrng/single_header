@@ -37,6 +37,8 @@ SH_STRING_BUILDER_DEF void sh_string_builder_append_string(ShStringBuilder *buil
 SH_STRING_BUILDER_DEF void sh_string_builder_append_number(ShStringBuilder *builder, uint64_t value,
                                                            usize leading_character_count, uint8_t leading_character,
                                                            uint64_t base, bool uppercase_digits);
+SH_STRING_BUILDER_DEF void sh_string_builder_append_formated(ShStringBuilder *builder, ShString format, ...);
+SH_STRING_BUILDER_DEF void sh_string_builder_append_formated_valist(ShStringBuilder *builder, ShString format, va_list args);
 SH_STRING_BUILDER_DEF ShString sh_string_builder_to_string(ShStringBuilder *builder, ShAllocator allocator);
 
 #endif // __SH_STRING_BUILDER_INCLUDE__
@@ -183,6 +185,101 @@ sh_string_builder_append_number(ShStringBuilder *builder, uint64_t value, usize 
     str.data = buffer + index + 1;
 
     sh_string_builder_append_string(builder, str);
+}
+
+SH_STRING_BUILDER_DEF void
+sh_string_builder_append_formated(ShStringBuilder *builder, ShString format, ...)
+{
+    va_list args;
+    va_start(args, format);
+
+    sh_string_builder_append_formated_valist(builder, format, args);
+
+    va_end(args);
+}
+
+SH_STRING_BUILDER_DEF void
+sh_string_builder_append_formated_valist(ShStringBuilder *builder, ShString format, va_list args)
+{
+    for (usize index = 0; index < format.count; index += 1)
+    {
+        uint8_t c = format.data[index];
+
+        if (c == '%')
+        {
+            index += 1;
+
+            if (index < format.count)
+            {
+                c = format.data[index];
+
+                switch (c)
+                {
+                    case 'c':
+                    {
+                        sh_string_builder_append_u8(builder, (uint8_t) va_arg(args, int));
+                    } break;
+
+                    case 'd':
+                    case 'i':
+                    {
+                        sh_string_builder_append_number(builder, va_arg(args, int), 0, '0', 10, false);
+                    } break;
+
+                    case 'u':
+                    {
+                        sh_string_builder_append_number(builder, va_arg(args, unsigned int), 0, '0', 10, false);
+                    } break;
+
+                    case 'z':
+                    {
+                        index += 1;
+
+                        if (index < format.count)
+                        {
+                            c = format.data[index];
+
+                            switch (c)
+                            {
+                                case 'd':
+                                case 'i':
+                                case 'u':
+                                {
+                                    sh_string_builder_append_number(builder, va_arg(args, size_t), 0, '0', 10, false);
+                                } break;
+
+                                default:
+                                {
+                                    sh_string_builder_append_u8(builder, '%');
+                                    sh_string_builder_append_u8(builder, 'z');
+                                    sh_string_builder_append_u8(builder, c);
+                                } break;
+                            }
+                        }
+                        else
+                        {
+                            sh_string_builder_append_u8(builder, '%');
+                            sh_string_builder_append_u8(builder, 'z');
+                        }
+                    } break;
+
+                    default:
+                    {
+                        sh_string_builder_append_u8(builder, '%');
+                        sh_string_builder_append_u8(builder, c);
+                    } break;
+                }
+            }
+            else
+            {
+                sh_string_builder_append_u8(builder, '%');
+            }
+        }
+        else
+        {
+            sh_string_builder_append_u8(builder, c);
+        }
+    }
 }
 
 SH_STRING_BUILDER_DEF ShString

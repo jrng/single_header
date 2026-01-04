@@ -36,9 +36,7 @@ handle_http_request(ShHttpRequest request, ShStringBuilder *output)
         ShString body = ShStringLiteral("<!doctype html><html><head><title>Hello</title></head><body><h2>Hello</h2></body></html>");
 
         sh_string_builder_append_string(output, ShStringLiteral("HTTP/1.1 200 OK\r\n"));
-        sh_string_builder_append_string(output, ShStringLiteral("Content-Length: "));
-        sh_string_builder_append_number(output, body.count, 0, '0', 10, false);
-        sh_string_builder_append_string(output, ShStringLiteral("\r\n"));
+        sh_string_builder_append_formated(output, ShStringLiteral("Content-Length: %zu\r\n"), body.count);
         sh_string_builder_append_string(output, ShStringLiteral("\r\n"));
         sh_string_builder_append_string(output, body);
     }
@@ -47,9 +45,7 @@ handle_http_request(ShHttpRequest request, ShStringBuilder *output)
         ShString body = ShStringLiteral("<!doctype html><html><head><title>Not Found</title></head><body><h2>Hello</h2></body></html>");
 
         sh_string_builder_append_string(output, ShStringLiteral("HTTP/1.1 404 Not Found\r\n"));
-        sh_string_builder_append_string(output, ShStringLiteral("Content-Length: "));
-        sh_string_builder_append_number(output, body.count, 0, '0', 10, false);
-        sh_string_builder_append_string(output, ShStringLiteral("\r\n"));
+        sh_string_builder_append_formated(output, ShStringLiteral("Content-Length: %zu\r\n"), body.count);
         sh_string_builder_append_string(output, ShStringLiteral("\r\n"));
         sh_string_builder_append_string(output, body);
     }
