@@ -34,9 +34,12 @@ SH_STRING_BUILDER_DEF void sh_string_builder_init(ShStringBuilder *builder, ShAl
 SH_STRING_BUILDER_DEF usize sh_string_builder_get_size(ShStringBuilder *builder);
 SH_STRING_BUILDER_DEF void sh_string_builder_append_u8(ShStringBuilder *builder, uint8_t c);
 SH_STRING_BUILDER_DEF void sh_string_builder_append_string(ShStringBuilder *builder, ShString str);
-SH_STRING_BUILDER_DEF void sh_string_builder_append_number(ShStringBuilder *builder, uint64_t value,
-                                                           usize leading_character_count, uint8_t leading_character,
-                                                           uint64_t base, bool uppercase_digits);
+SH_STRING_BUILDER_DEF void sh_string_builder_append_unsigned_number(ShStringBuilder *builder, uint64_t value,
+                                                                    usize leading_character_count, uint8_t leading_character,
+                                                                    uint64_t base, bool uppercase_digits);
+SH_STRING_BUILDER_DEF void sh_string_builder_append_signed_number(ShStringBuilder *builder, int64_t value,
+                                                                  usize leading_character_count, uint8_t leading_character,
+                                                                  uint64_t base, bool uppercase_digits);
 SH_STRING_BUILDER_DEF void sh_string_builder_append_formated(ShStringBuilder *builder, ShString format, ...);
 SH_STRING_BUILDER_DEF void sh_string_builder_append_formated_valist(ShStringBuilder *builder, ShString format, va_list args);
 SH_STRING_BUILDER_DEF ShString sh_string_builder_to_string(ShStringBuilder *builder, ShAllocator allocator);
@@ -147,8 +150,8 @@ sh_string_builder_append_string(ShStringBuilder *builder, ShString str)
 }
 
 SH_STRING_BUILDER_DEF void
-sh_string_builder_append_number(ShStringBuilder *builder, uint64_t value, usize leading_character_count,
-                                uint8_t leading_character, uint64_t base, bool uppercase_digits)
+sh_string_builder_append_unsigned_number(ShStringBuilder *builder, uint64_t value, usize leading_character_count,
+                                         uint8_t leading_character, uint64_t base, bool uppercase_digits)
 {
     uint8_t buffer[64];
     usize index = ShArrayCount(buffer) - 1;
@@ -188,6 +191,21 @@ sh_string_builder_append_number(ShStringBuilder *builder, uint64_t value, usize 
 }
 
 SH_STRING_BUILDER_DEF void
+sh_string_builder_append_signed_number(ShStringBuilder *builder, int64_t value, usize leading_character_count,
+                                       uint8_t leading_character, uint64_t base, bool uppercase_digits)
+{
+    if (value < 0)
+    {
+        sh_string_builder_append_u8(builder, '-');
+        sh_string_builder_append_unsigned_number(builder, (uint64_t) -value, leading_character_count, leading_character, base, uppercase_digits);
+    }
+    else
+    {
+        sh_string_builder_append_unsigned_number(builder, (uint64_t) value, leading_character_count, leading_character, base, uppercase_digits);
+    }
+}
+
+SH_STRING_BUILDER_DEF void
 sh_string_builder_append_formated(ShStringBuilder *builder, ShString format, ...)
 {
     va_list args;
@@ -223,12 +241,12 @@ sh_string_builder_append_formated_valist(ShStringBuilder *builder, ShString form
                     case 'd':
                     case 'i':
                     {
-                        sh_string_builder_append_number(builder, va_arg(args, int), 0, '0', 10, false);
+                        sh_string_builder_append_signed_number(builder, va_arg(args, int), 0, '0', 10, false);
                     } break;
 
                     case 'u':
                     {
-                        sh_string_builder_append_number(builder, va_arg(args, unsigned int), 0, '0', 10, false);
+                        sh_string_builder_append_unsigned_number(builder, va_arg(args, unsigned int), 0, '0', 10, false);
                     } break;
 
                     case 'z':
@@ -245,7 +263,7 @@ sh_string_builder_append_formated_valist(ShStringBuilder *builder, ShString form
                                 case 'i':
                                 case 'u':
                                 {
-                                    sh_string_builder_append_number(builder, va_arg(args, size_t), 0, '0', 10, false);
+                                    sh_string_builder_append_unsigned_number(builder, va_arg(args, size_t), 0, '0', 10, false);
                                 } break;
 
                                 default:
