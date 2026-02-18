@@ -238,10 +238,26 @@ sh_string_builder_append_formated_valist(ShStringBuilder *builder, ShString form
                         sh_string_builder_append_u8(builder, (uint8_t) va_arg(args, int));
                     } break;
 
+                    case 's':
+                    {
+                        char *c_str = va_arg(args, char *);
+                        sh_string_builder_append_string(builder, ShCString(c_str));
+                    } break;
+
                     case 'd':
                     case 'i':
                     {
                         sh_string_builder_append_signed_number(builder, va_arg(args, int), 0, '0', 10, false);
+                    } break;
+
+                    case 'x':
+                    {
+                        sh_string_builder_append_unsigned_number(builder, va_arg(args, unsigned int), 0, '0', 16, false);
+                    } break;
+
+                    case 'X':
+                    {
+                        sh_string_builder_append_unsigned_number(builder, va_arg(args, unsigned int), 0, '0', 16, true);
                     } break;
 
                     case 'u':
@@ -264,6 +280,16 @@ sh_string_builder_append_formated_valist(ShStringBuilder *builder, ShString form
                                 case 'u':
                                 {
                                     sh_string_builder_append_unsigned_number(builder, va_arg(args, size_t), 0, '0', 10, false);
+                                } break;
+
+                                case 'x':
+                                {
+                                    sh_string_builder_append_unsigned_number(builder, va_arg(args, size_t), 0, '0', 16, false);
+                                } break;
+
+                                case 'X':
+                                {
+                                    sh_string_builder_append_unsigned_number(builder, va_arg(args, size_t), 0, '0', 16, true);
                                 } break;
 
                                 default:
