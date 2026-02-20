@@ -307,6 +307,68 @@ sh_string_builder_append_formated_valist(ShStringBuilder *builder, ShString form
                         }
                     } break;
 
+                    case '.':
+                    {
+                        index += 1;
+
+                        if (index < format.count)
+                        {
+                            c = format.data[index];
+
+                            switch (c)
+                            {
+                                case '*':
+                                {
+                                    index += 1;
+
+                                    if (index < format.count)
+                                    {
+                                        c = format.data[index];
+
+                                        switch (c)
+                                        {
+                                            case 's':
+                                            {
+                                                // TODO: what if the string is actually zero terminated, but shorter then the length provided.
+                                                // this is not taken into account here.
+                                                ShString str;
+                                                str.count = va_arg(args, int);
+                                                str.data  = (uint8_t *) va_arg(args, char *);
+                                                sh_string_builder_append_string(builder, str);
+                                            } break;
+
+                                            default:
+                                            {
+                                                sh_string_builder_append_u8(builder, '%');
+                                                sh_string_builder_append_u8(builder, '.');
+                                                sh_string_builder_append_u8(builder, '*');
+                                                sh_string_builder_append_u8(builder, c);
+                                            } break;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        sh_string_builder_append_u8(builder, '%');
+                                        sh_string_builder_append_u8(builder, '.');
+                                        sh_string_builder_append_u8(builder, '*');
+                                    }
+                                } break;
+
+                                default:
+                                {
+                                    sh_string_builder_append_u8(builder, '%');
+                                    sh_string_builder_append_u8(builder, '.');
+                                    sh_string_builder_append_u8(builder, c);
+                                } break;
+                            }
+                        }
+                        else
+                        {
+                            sh_string_builder_append_u8(builder, '%');
+                            sh_string_builder_append_u8(builder, '.');
+                        }
+                    } break;
+
                     default:
                     {
                         sh_string_builder_append_u8(builder, '%');
