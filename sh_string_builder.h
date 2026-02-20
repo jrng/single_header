@@ -44,6 +44,9 @@ SH_STRING_BUILDER_DEF void sh_string_builder_append_formated(ShStringBuilder *bu
 SH_STRING_BUILDER_DEF void sh_string_builder_append_formated_valist(ShStringBuilder *builder, ShString format, va_list args);
 SH_STRING_BUILDER_DEF ShString sh_string_builder_to_string(ShStringBuilder *builder, ShAllocator allocator);
 
+// This creates a string allocated in 'allocator' from a format string and arguments.
+SH_STRING_BUILDER_DEF ShString sh_string_formated(ShThreadContext *thread_context, ShAllocator allocator, ShString format, ...);
+
 #endif // __SH_STRING_BUILDER_INCLUDE__
 
 #ifdef SH_STRING_BUILDER_IMPLEMENTATION
@@ -414,6 +417,26 @@ sh_string_builder_to_string(ShStringBuilder *builder, ShAllocator allocator)
             buffer = buffer->next;
         }
     }
+
+    return result;
+}
+
+SH_STRING_BUILDER_DEF ShString
+sh_string_formated(ShThreadContext *thread_context, ShAllocator allocator, ShString format, ...)
+{
+    ShTemporaryMemory temp_memory = sh_begin_temporary_memory(thread_context, 1, &allocator);
+
+    va_list args;
+    va_start(args, format);
+
+    ShStringBuilder builder;
+    sh_string_builder_init(&builder, temp_memory.allocator);
+    sh_string_builder_append_formated_valist(&builder, format, args);
+    ShString result = sh_string_builder_to_string(&builder, allocator);
+
+    va_end(args);
+
+    sh_end_temporary_memory(temp_memory);
 
     return result;
 }
