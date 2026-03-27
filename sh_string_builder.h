@@ -32,6 +32,7 @@ typedef struct
 
 SH_STRING_BUILDER_DEF void sh_string_builder_init(ShStringBuilder *builder, ShAllocator allocator);
 SH_STRING_BUILDER_DEF usize sh_string_builder_get_size(ShStringBuilder *builder);
+SH_STRING_BUILDER_DEF void sh_string_builder_append(ShStringBuilder *builder, ShStringBuilder *append);
 SH_STRING_BUILDER_DEF void sh_string_builder_append_u8(ShStringBuilder *builder, uint8_t c);
 SH_STRING_BUILDER_DEF void sh_string_builder_append_string(ShStringBuilder *builder, ShString str);
 SH_STRING_BUILDER_DEF void sh_string_builder_append_unsigned_number(ShStringBuilder *builder, uint64_t value,
@@ -73,6 +74,29 @@ sh_string_builder_get_size(ShStringBuilder *builder)
     }
 
     return result;
+}
+
+SH_STRING_BUILDER_DEF void
+sh_string_builder_append(ShStringBuilder *builder, ShStringBuilder *append)
+{
+    // TODO: check if both builder have the same allocator
+
+    if (append->last_buffer)
+    {
+        if (builder->last_buffer)
+        {
+            builder->last_buffer->next = append->first_buffer;
+        }
+        else
+        {
+            builder->first_buffer = append->first_buffer;
+        }
+
+        builder->last_buffer = append->last_buffer;
+
+        append->first_buffer = NULL;
+        append->last_buffer = NULL;
+    }
 }
 
 static inline void
