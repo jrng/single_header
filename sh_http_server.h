@@ -82,6 +82,7 @@ typedef struct
 {
     ShString input_buffer;
     ShArena arena;
+    usize output_cursor;
     ShStringBuilder output_builder;
 
     bool is_websocket;
@@ -328,7 +329,6 @@ sh_http_server_run(ShThreadContext *thread_context, ShHttpServer *http_server, b
                 for (;;)
                 {
                     ret = read(client->socket, client->input_buffer.data + client->input_buffer.count, INPUT_BUFFER_SIZE - client->input_buffer.count);
-                    fprintf(stderr, " read = %zd\n", ret);
 
                     if (ret < 0)
                     {
@@ -341,7 +341,6 @@ sh_http_server_run(ShThreadContext *thread_context, ShHttpServer *http_server, b
                     }
                     else if (ret == 0)
                     {
-                        fprintf(stderr, "POLLIN read = 0\n");
                         close(client->socket);
                         *sh_array_append(clients_to_delete) = i;
                         has_request = false;
@@ -356,11 +355,9 @@ sh_http_server_run(ShThreadContext *thread_context, ShHttpServer *http_server, b
 
                 if (has_request)
                 {
-                    fprintf(stderr, "has request - is_websocket = %s\n",
-                            client->is_websocket ? "true" : "false");
-
                     ShAllocator allocator = sh_arena_get_allocator(&client->arena);
 
+                    client->output_cursor = 0;
                     sh_string_builder_init(&client->output_builder, allocator);
 
                     ShHttpRequest request;
@@ -485,23 +482,46 @@ sh_http_server_run(ShThreadContext *thread_context, ShHttpServer *http_server, b
             }
             else if (sockets[i + 1].revents & POLLOUT)
             {
-                // TODO: do better
-                ShStringBuffer *buffer = client->output_builder.first_buffer;
-
-                write(client->socket, buffer->data, buffer->occupied);
-
-                client->is_waiting_for_request = true;
-
-                if (client->close_connection)
+                while (client->output_builder.first_buffer)
                 {
-                    fprintf(stderr, "POLLOUT close_connection\n");
-                    close(client->socket);
-                    *sh_array_append(clients_to_delete) = i;
+                    ShStringBuffer *buffer = client->output_builder.first_buffer;
+
+                    ssize_t ret = write(client->socket, buffer->data + client->output_cursor, buffer->occupied + client->output_cursor);
+
+                    if (ret < 0)
+                    {
+                        if (errno == EWOULDBLOCK)
+                        {
+                            // TODO:
+                        }
+
+                        break;
+                    }
+                    else
+                    {
+                        client->output_cursor += ret;
+
+                        if (client->output_cursor == buffer->occupied)
+                        {
+                            client->output_cursor = 0;
+                            client->output_builder.first_buffer = buffer->next;
+                        }
+                    }
+                }
+
+                if (!client->output_builder.first_buffer)
+                {
+                    client->is_waiting_for_request = true;
+
+                    if (client->close_connection)
+                    {
+                        close(client->socket);
+                        *sh_array_append(clients_to_delete) = i;
+                    }
                 }
             }
             else if (sockets[i + 1].revents & (POLLERR | POLLHUP))
             {
-                fprintf(stderr, "POLLHUP\n");
                 close(client->socket);
                 *sh_array_append(clients_to_delete) = i;
             }
