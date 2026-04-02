@@ -651,6 +651,13 @@ sh_http_server_destroy(ShHttpServer *http_server)
 {
 #  if SH_PLATFORM_UNIX
     close(http_server->socket);
+
+    for (uint16_t i = 0; i < http_server->client_count; i += 1)
+    {
+        close(http_server->clients[i].socket);
+    }
+
+    http_server->client_count = 0;
 #  else
     assert(!"unimplemented");
 #  endif
