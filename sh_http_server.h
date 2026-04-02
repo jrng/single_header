@@ -116,7 +116,7 @@ typedef struct
 // Creates an http server and starts listening to the given port.
 SH_HTTP_SERVER_DEF bool sh_http_server_create(ShHttpServer *http_server, ShAllocator allocator, uint16_t port, uint16_t max_client_count, ShHttpRequestCallback handle_request);
 
-SH_HTTP_SERVER_DEF void sh_http_server_run(ShThreadContext *thread_context, ShHttpServer *http_server, bool wait_for_event);
+SH_HTTP_SERVER_DEF void sh_http_server_iterate(ShThreadContext *thread_context, ShHttpServer *http_server, bool wait_for_event);
 
 SH_HTTP_SERVER_DEF bool sh_http_parse_request(ShHttpRequest *request, ShString request_string);
 
@@ -248,7 +248,7 @@ sh_http_server_create(ShHttpServer *http_server, ShAllocator allocator, uint16_t
 }
 
 SH_HTTP_SERVER_DEF void
-sh_http_server_run(ShThreadContext *thread_context, ShHttpServer *http_server, bool wait_for_event)
+sh_http_server_iterate(ShThreadContext *thread_context, ShHttpServer *http_server, bool wait_for_event)
 {
     ShTemporaryMemory temp_memory = sh_begin_temporary_memory(thread_context, 0, NULL);
 

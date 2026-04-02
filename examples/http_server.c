@@ -68,7 +68,7 @@ int main(void)
 
     while (true)
     {
-        sh_http_server_run(thread_context, &http_server, true);
+        sh_http_server_iterate(thread_context, &http_server, true);
     }
 
     sh_http_server_destroy(&http_server);
