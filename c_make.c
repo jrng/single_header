@@ -13,7 +13,11 @@ build_example(const char *name)
     c_make_command_append_command_line(&command, c_make_get_target_c_flags());
     c_make_command_append_default_compiler_flags(&command, c_make_get_build_type());
 
-    if (!c_make_compiler_is_msvc(target_c_compiler))
+    if (c_make_get_target_platform() == CMakePlatformLinux)
+    {
+        c_make_command_append(&command, "-std=gnu99", "-Wall", "-Wextra", "-pedantic");
+    }
+    else if (!c_make_compiler_is_msvc(target_c_compiler))
     {
         c_make_command_append(&command, "-std=c99", "-Wall", "-Wextra", "-pedantic");
     }
