@@ -94,7 +94,7 @@ typedef struct
 #  endif
 } ShHttpClient;
 
-typedef void (*ShHttpRequestCallback)(ShHttpRequest request, ShStringBuilder *response);
+typedef void (*ShHttpRequestCallback)(void *user_data, ShHttpRequest request, ShStringBuilder *response);
 
 typedef struct
 {
@@ -106,6 +106,7 @@ typedef struct
     void *allocation;
     ShAllocator allocator;
 
+    void *user_data;
     ShHttpRequestCallback handle_request;
 
 #  if SH_PLATFORM_UNIX
@@ -114,7 +115,7 @@ typedef struct
 } ShHttpServer;
 
 // Creates an http server and starts listening to the given port.
-SH_HTTP_SERVER_DEF bool sh_http_server_create(ShHttpServer *http_server, ShAllocator allocator, uint16_t port, uint16_t max_client_count, ShHttpRequestCallback handle_request);
+SH_HTTP_SERVER_DEF bool sh_http_server_create(ShHttpServer *http_server, ShAllocator allocator, uint16_t port, uint16_t max_client_count, void *user_data, ShHttpRequestCallback handle_request);
 
 SH_HTTP_SERVER_DEF void sh_http_server_iterate(ShThreadContext *thread_context, ShHttpServer *http_server, bool wait_for_event);
 
@@ -155,7 +156,7 @@ _sh_http_server_set_socket_non_blocking(int socket)
 #  endif
 
 SH_HTTP_SERVER_DEF bool
-sh_http_server_create(ShHttpServer *http_server, ShAllocator allocator, uint16_t port, uint16_t max_client_count, ShHttpRequestCallback handle_request)
+sh_http_server_create(ShHttpServer *http_server, ShAllocator allocator, uint16_t port, uint16_t max_client_count, void *user_data, ShHttpRequestCallback handle_request)
 {
 #  if SH_PLATFORM_WINDOWS
     WSADATA winsocket_data;
@@ -216,6 +217,7 @@ sh_http_server_create(ShHttpServer *http_server, ShAllocator allocator, uint16_t
 
     http_server->client_count = 0;
     http_server->max_client_count = max_client_count;
+    http_server->user_data = user_data;
     http_server->handle_request = handle_request;
 
     usize clients_size       = max_client_count * sizeof(ShHttpClient);
@@ -449,7 +451,7 @@ sh_http_server_iterate(ShThreadContext *thread_context, ShHttpServer *http_serve
                         if ((sh_string_builder_get_size(&client->output_builder) == 0) &&
                             http_server->handle_request)
                         {
-                            http_server->handle_request(request, &client->output_builder);
+                            http_server->handle_request(http_server->user_data, request, &client->output_builder);
                         }
 
                         if (sh_string_builder_get_size(&client->output_builder) == 0)

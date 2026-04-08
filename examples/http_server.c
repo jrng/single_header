@@ -29,8 +29,10 @@ void *c_default_allocator_func(void *allocator_data, ShAllocatorAction action, u
 }
 
 static void
-handle_http_request(ShHttpRequest request, ShStringBuilder *output)
+handle_http_request(void *user_data, ShHttpRequest request, ShStringBuilder *output)
 {
+    (void) user_data;
+
     if (sh_string_equal(request.uri, ShStringLiteral("/")))
     {
         ShString body = ShStringLiteral("<!doctype html><html><head><title>Hello</title></head><body><h2>Hello</h2></body></html>");
@@ -59,7 +61,7 @@ int main(void)
 
     ShHttpServer http_server;
 
-    if (!sh_http_server_create(&http_server, allocator, 8080, 10, handle_http_request))
+    if (!sh_http_server_create(&http_server, allocator, 8080, 10, NULL, handle_http_request))
     {
         return -1;
     }
