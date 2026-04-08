@@ -95,6 +95,14 @@ struct ShList
     (element)->next->prev = (element)->prev;         \
     (element)->prev = (element)->next = (element);
 
+#  define ShDListForEach(type, iter, sentinel)       \
+    for (type *iter = (sentinel)->next;              \
+         iter != (sentinel); iter = iter->next)
+
+#  define ShDListForEachReversed(type,iter,sentinel) \
+    for (type *iter = (sentinel)->prev;              \
+         iter != (sentinel); iter = iter->prev)
+
 typedef struct
 {
     usize count;
