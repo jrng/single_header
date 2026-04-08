@@ -33,12 +33,112 @@
 #    define SH_PLATFORM_DEF extern
 #  endif
 
+typedef enum
+{
+    SH_FILE_TYPE_DIRECTORY = 0,
+    SH_FILE_TYPE_REGULAR   = 1,
+    SH_FILE_TYPE_OTHER     = 2,
+} ShFileType;
+
+typedef struct
+{
+    ShFileType type;
+    uint64_t size;
+    uint64_t modification_time_ms;
+} ShFileInformation;
+
+SH_PLATFORM_DEF bool sh_get_file_information(ShThreadContext *thread_context, ShString filename, ShFileInformation *information);
+
 SH_PLATFORM_DEF bool sh_read_entire_file(ShThreadContext *thread_context, ShAllocator allocator, ShString filename, ShString *content);
 SH_PLATFORM_DEF bool sh_write_entire_file(ShThreadContext *thread_context, ShString filename, ShStringBuilder *content);
 
 #endif // __SH_PLATFORM_INCLUDE__
 
 #ifdef SH_PLATFORM_IMPLEMENTATION
+
+SH_PLATFORM_DEF bool
+sh_get_file_information(ShThreadContext *thread_context, ShString filename, ShFileInformation *information)
+{
+#  if SH_PLATFORM_WINDOWS
+    ShTemporaryMemory temp_memory = sh_begin_temporary_memory(thread_context, 0, NULL);
+
+    LPWSTR utf16_filename = (LPWSTR) sh_string_to_c_string(temp_memory.allocator, sh_string_utf8_to_utf16le(temp_memory.allocator, filename));
+    HANDLE file = CreateFileW(utf16_filename, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, 0);
+
+    sh_end_temporary_memory(temp_memory);
+
+    if (file == INVALID_HANDLE_VALUE)
+    {
+        return false;
+    }
+
+    BY_HANDLE_FILE_INFORMATION file_info;
+
+    if (!GetFileInformationByHandle(file, &file_info))
+    {
+        CloseHandle(file);
+        return false;
+    }
+
+    if (file_info.dwFileAttributes == INVALID_FILE_ATTRIBUTES)
+    {
+        information->type = SH_FILE_TYPE_OTHER;
+    }
+    else if (file_info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+    {
+        information->type = SH_FILE_TYPE_DIRECTORY;
+    }
+    else
+    {
+        information->type = SH_FILE_TYPE_REGULAR;
+    }
+
+    information->size = ((uint64_t) file_info.nFileSizeHigh << 32) | (uint64_t) file_info.nFileSizeLow;
+    information->modification_time_ms = (((uint64_t) file_info.ftLastWriteTime.dwHighDateTime << 32) | (uint64_t) file_info.ftLastWriteTime.dwLowDateTime) / 10000;
+
+    CloseHandle(file);
+
+    return true;
+#  elif SH_PLATFORM_UNIX
+    ShTemporaryMemory temp_memory = sh_begin_temporary_memory(thread_context, 0, NULL);
+
+    struct stat stats;
+    int ret = lstat(sh_string_to_c_string(temp_memory.allocator, filename), &stats);
+
+    sh_end_temporary_memory(temp_memory);
+
+    if (ret)
+    {
+        return false;
+    }
+
+#    if SH_PLATFORM_ANDROID || SH_PLATFORM_FREEBSD || SH_PLATFORM_LINUX
+    struct timespec mod_time = stats.st_mtim;
+#    elif SH_PLATFORM_MACOS
+    struct timespec mod_time = stats.st_mtimespec;
+#    endif
+
+    if (S_ISREG(stats.st_mode))
+    {
+        information->type = SH_FILE_TYPE_REGULAR;
+    }
+    else if (S_ISDIR(stats.st_mode))
+    {
+        information->type = SH_FILE_TYPE_DIRECTORY;
+    }
+    else
+    {
+        information->type = SH_FILE_TYPE_OTHER;
+    }
+
+    information->size = stats.st_size;
+    information->modification_time_ms = ((uint64_t) mod_time.tv_sec * 1000) + ((uint64_t) mod_time.tv_nsec / 1000000);
+
+    return true;
+#  else
+    return false;
+#  endif
+}
 
 SH_PLATFORM_DEF bool
 sh_read_entire_file(ShThreadContext *thread_context, ShAllocator allocator, ShString filename, ShString *content)
