@@ -118,10 +118,12 @@ typedef struct
 #    define ShStringEmpty ShString {}
 #    define ShStringLiteral(str) ShString { sizeof(str) - 1, (uint8_t *) (str) }
 #    define ShCString(str) ShString { sh_c_string_get_length(str), (uint8_t *) (str) }
+#    define ShMakeString(count, ptr) ShString { (count), (uint8_t *) (ptr) }
 #  else
 #    define ShStringEmpty (ShString) { 0, NULL }
 #    define ShStringLiteral(str) (ShString) { sizeof(str) - 1, (uint8_t *) (str) }
 #    define ShCString(str) (ShString) { sh_c_string_get_length(str), (uint8_t *) (str) }
+#    define ShMakeString(count, ptr) (ShString) { (count), (uint8_t *) (ptr) }
 #  endif
 
 typedef struct
