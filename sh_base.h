@@ -229,6 +229,7 @@ SH_BASE_DEF ShString sh_string_split_left(ShString *str, ShString split);
 SH_BASE_DEF ShString sh_string_split_left_on_char(ShString *str, uint8_t c);
 SH_BASE_DEF ShString sh_string_split_right(ShString *str, ShString split);
 SH_BASE_DEF ShString sh_string_split_right_on_char(ShString *str, uint8_t c);
+SH_BASE_DEF ShString sh_string_split_right_on_path_separator(ShString *str);
 
 SH_BASE_DEF ShString sh_string_ascii_to_lower(ShAllocator allocator, ShString str);
 SH_BASE_DEF ShString sh_string_ascii_to_upper(ShAllocator allocator, ShString str);
@@ -768,6 +769,36 @@ sh_string_split_right_on_char(ShString *str, uint8_t c)
     while (index > 0)
     {
         if (str->data[index - 1] == c)
+        {
+            break;
+        }
+
+        index -= 1;
+    }
+
+    ShString result;
+    result.count = str->count - index;
+    result.data = str->data + index;
+
+    str->count = index;
+
+    if (index > 0)
+    {
+        str->count -= 1;
+    }
+
+    return result;
+}
+
+SH_BASE_DEF ShString
+sh_string_split_right_on_path_separator(ShString *str)
+{
+    usize index = str->count;
+
+    while (index > 0)
+    {
+        if ((str->data[index - 1] == '/') ||
+            (str->data[index - 1] == '\\'))
         {
             break;
         }
