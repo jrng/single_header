@@ -64,6 +64,10 @@ typedef size_t usize;
 #  define ShOffsetOf(type, member) (usize) &((type *) NULL)->member
 #  define ShContainerOf(ptr, type, member) (type *) ((uint8_t *) (ptr) - ShOffsetOf(type, member))
 
+#  define ShArgCount(...) __ShArgCount(_ShArgCount(__VA_ARGS__, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0))
+#  define __ShArgCount(x) x
+#  define _ShArgCount(_1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, n, ...) n
+
 typedef struct ShList ShList;
 
 struct ShList
@@ -222,7 +226,11 @@ SH_BASE_DEF bool sh_string_equal(ShString a, ShString b);
 SH_BASE_DEF bool sh_string_starts_with(ShString str, ShString prefix);
 SH_BASE_DEF bool sh_string_ends_with(ShString str, ShString suffix);
 
+#  define sh_string_concat(thread_context, allocator, ...) sh_string_concat_n(thread_context, allocator, ShArgCount(__VA_ARGS__), __VA_ARGS__)
+#  define sh_string_path_concat(thread_context, allocator, ...) sh_string_path_concat_n(thread_context, allocator, ShArgCount(__VA_ARGS__), __VA_ARGS__)
+
 SH_BASE_DEF ShString sh_string_concat_n(ShThreadContext *thread_context, ShAllocator allocator, usize n, ...);
+SH_BASE_DEF ShString sh_string_path_concat_n(ShThreadContext *thread_context, ShAllocator allocator, usize n, ...);
 
 SH_BASE_DEF ShString sh_string_trim(ShString str);
 SH_BASE_DEF ShString sh_string_split_left(ShString *str, ShString split);
@@ -587,7 +595,7 @@ sh_string_concat_n(ShThreadContext *thread_context, ShAllocator allocator, usize
 {
     ShTemporaryMemory temp_memory = sh_begin_temporary_memory(thread_context, 1, &allocator);
 
-    ShString result = { 0, NULL };
+    ShString result = ShStringEmpty;
     ShString *strings = sh_alloc_array(temp_memory.allocator, ShString, n);
 
     va_list args;
@@ -612,6 +620,74 @@ sh_string_concat_n(ShThreadContext *thread_context, ShAllocator allocator, usize
         for (usize j = 0; j < str.count; j += 1)
         {
             *at++ = str.data[j];
+        }
+    }
+
+    sh_end_temporary_memory(temp_memory);
+
+    return result;
+}
+
+SH_BASE_DEF ShString
+sh_string_path_concat_n(ShThreadContext *thread_context, ShAllocator allocator, usize n, ...)
+{
+    ShTemporaryMemory temp_memory = sh_begin_temporary_memory(thread_context, 1, &allocator);
+
+    ShString result = ShStringEmpty;
+    ShString *strings = sh_alloc_array(temp_memory.allocator, ShString, n);
+
+    va_list args;
+    va_start(args, n);
+
+    for (usize i = 0; i < n; i += 1)
+    {
+        ShString str = va_arg(args, ShString);
+
+        if ((str.count > 0) && ((str.data[str.count - 1] == '\\') || (str.data[str.count - 1] == '/')))
+        {
+            str.count -= 1;
+        }
+
+        if (i > 0)
+        {
+            if ((str.count > 0) && ((str.data[0] == '\\') || (str.data[0] == '/')))
+            {
+                str.count -= 1;
+                str.data  += 1;
+            }
+
+            result.count += str.count + 1;
+        }
+        else
+        {
+            result.count += str.count;
+        }
+
+        strings[i] = str;
+    }
+
+    va_end(args);
+
+    result.data = sh_alloc_array(allocator, uint8_t, result.count);
+
+    uint8_t *at = result.data;
+
+    for (usize i = 0; i < n; i += 1)
+    {
+        ShString str = strings[i];
+
+        for (usize j = 0; j < str.count; j += 1)
+        {
+            *at++ = str.data[j];
+        }
+
+        if (i < (n - 1))
+        {
+#  if SH_PLATFORM_WINDOWS
+            *at++ = '\\';
+#  else
+            *at++ = '/';
+#  endif
         }
     }
 

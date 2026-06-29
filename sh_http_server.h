@@ -430,7 +430,7 @@ sh_http_server_iterate(ShThreadContext *thread_context, ShHttpServer *http_serve
                                         ShString websocket_key = websocket_key_field->value;
                                         ShString websocket_magic = ShStringLiteral("258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
 
-                                        ShString websocket_concat = sh_string_concat_n(thread_context, temp_memory.allocator, 2, websocket_key, websocket_magic);
+                                        ShString websocket_concat = sh_string_concat(thread_context, temp_memory.allocator, websocket_key, websocket_magic);
                                         ShSha1 websocket_sha1 = sh_hash_sha1(websocket_concat.count, websocket_concat.data);
                                         ShString websocket_accept = sh_base64_encode(temp_memory.allocator, ShArrayCount(websocket_sha1.hash), websocket_sha1.hash);
 
