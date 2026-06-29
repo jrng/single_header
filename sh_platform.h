@@ -21,6 +21,7 @@
 
 #  elif SH_PLATFORM_UNIX
 
+#    include <errno.h>
 #    include <fcntl.h>
 #    include <unistd.h>
 #    include <sys/stat.h>
@@ -48,6 +49,11 @@ typedef struct
 } ShFileInformation;
 
 SH_PLATFORM_DEF bool sh_get_file_information(ShThreadContext *thread_context, ShString filename, ShFileInformation *information);
+
+SH_PLATFORM_DEF bool sh_file_exists(ShThreadContext *thread_context, ShString file_name);
+SH_PLATFORM_DEF bool sh_directory_exists(ShThreadContext *thread_context, ShString directory_name);
+
+SH_PLATFORM_DEF bool sh_create_directory(ShThreadContext *thread_context, ShString directory_name, bool create_parents);
 
 SH_PLATFORM_DEF bool sh_read_entire_file(ShThreadContext *thread_context, ShAllocator allocator, ShString filename, ShString *content);
 SH_PLATFORM_DEF bool sh_write_entire_file(ShThreadContext *thread_context, ShString filename, ShStringBuilder *content);
@@ -135,6 +141,149 @@ sh_get_file_information(ShThreadContext *thread_context, ShString filename, ShFi
     information->modification_time_ms = ((uint64_t) mod_time.tv_sec * 1000) + ((uint64_t) mod_time.tv_nsec / 1000000);
 
     return true;
+#  else
+    return false;
+#  endif
+}
+
+SH_PLATFORM_DEF bool
+sh_file_exists(ShThreadContext *thread_context, ShString file_name)
+{
+#  if SH_PLATFORM_WINDOWS
+    ShTemporaryMemory temp_memory = sh_begin_temporary_memory(thread_context, 0, NULL);
+
+    LPWSTR utf16_file_name = (LPWSTR) sh_string_to_c_string(temp_memory.allocator, sh_string_utf8_to_utf16le(temp_memory.allocator, file_name));
+    DWORD file_attributes = GetFileAttributesW(utf16_file_name);
+
+    sh_end_temporary_memory(temp_memory);
+
+    return ((file_attributes != INVALID_FILE_ATTRIBUTES) || !(file_attributes & FILE_ATTRIBUTE_DIRECTORY)) ? true : false;
+#  elif SH_PLATFORM_UNIX
+    bool result = false;
+    struct stat stats;
+
+    ShTemporaryMemory temp_memory = sh_begin_temporary_memory(thread_context, 0, NULL);
+
+    if (!stat(sh_string_to_c_string(temp_memory.allocator, file_name), &stats))
+    {
+        result = S_ISREG(stats.st_mode) ? true : false;
+    }
+
+    sh_end_temporary_memory(temp_memory);
+
+    return result;
+#  else
+    return false;
+#  endif
+}
+
+SH_PLATFORM_DEF bool
+sh_directory_exists(ShThreadContext *thread_context, ShString directory_name)
+{
+#  if SH_PLATFORM_WINDOWS
+    ShTemporaryMemory temp_memory = sh_begin_temporary_memory(thread_context, 0, NULL);
+
+    LPWSTR utf16_directory_name = (LPWSTR) sh_string_to_c_string(temp_memory.allocator, sh_string_utf8_to_utf16le(temp_memory.allocator, directory_name));
+    DWORD file_attributes = GetFileAttributesW(utf16_directory_name);
+
+    sh_end_temporary_memory(temp_memory);
+
+    return ((file_attributes != INVALID_FILE_ATTRIBUTES) || (file_attributes & FILE_ATTRIBUTE_DIRECTORY)) ? true : false;
+#  elif SH_PLATFORM_UNIX
+    bool result = false;
+    struct stat stats;
+
+    ShTemporaryMemory temp_memory = sh_begin_temporary_memory(thread_context, 0, NULL);
+
+    if (!stat(sh_string_to_c_string(temp_memory.allocator, directory_name), &stats))
+    {
+        result = S_ISDIR(stats.st_mode) ? true : false;
+    }
+
+    sh_end_temporary_memory(temp_memory);
+
+    return result;
+#  else
+    return false;
+#  endif
+}
+
+SH_PLATFORM_DEF bool
+sh_create_directory(ShThreadContext *thread_context, ShString directory_name, bool create_parents)
+{
+#  if SH_PLATFORM_WINDOWS
+    ShTemporaryMemory temp_memory = sh_begin_temporary_memory(thread_context, 0, NULL);
+
+    LPWSTR *directories = NULL;
+    sh_array_init(directories, 4, temp_memory.allocator);
+
+    do {
+        LPWSTR utf16_directory_name = (LPWSTR) sh_string_to_c_string(temp_memory.allocator, sh_string_utf8_to_utf16le(temp_memory.allocator, directory_name));
+        DWORD file_attributes = GetFileAttributesW(utf16_directory_name);
+
+        if ((file_attributes != INVALID_FILE_ATTRIBUTES) && (file_attributes & FILE_ATTRIBUTE_DIRECTORY))
+        {
+            break;
+        }
+
+        *sh_array_append(directories) = utf16_directory_name;
+        sh_string_split_right_on_path_separator(&directory_name);
+    } while (create_parents && (directory_name.count > 0));
+
+    bool result = true;
+    usize count = sh_array_count(directories);
+
+    while (count > 0)
+    {
+        count -= 1;
+
+        if (!CreateDirectoryW(directories[count], NULL) && (GetLastError() != ERROR_ALREADY_EXISTS))
+        {
+            result = false;
+            break;
+        }
+    }
+
+    sh_end_temporary_memory(temp_memory);
+
+    return result;
+#  elif SH_PLATFORM_UNIX
+    ShTemporaryMemory temp_memory = sh_begin_temporary_memory(thread_context, 0, NULL);
+
+    const char **directories = NULL;
+    sh_array_init(directories, 4, temp_memory.allocator);
+
+    do {
+        const char *c_directory_name = sh_string_to_c_string(temp_memory.allocator, directory_name);
+
+        struct stat stats;
+
+        if (!stat(c_directory_name, &stats) && S_ISDIR(stats.st_mode))
+        {
+            break;
+        }
+
+        *sh_array_append(directories) = c_directory_name;
+        sh_string_split_right_on_path_separator(&directory_name);
+    } while (create_parents && (directory_name.count > 0));
+
+    bool result = true;
+    usize count = sh_array_count(directories);
+
+    while (count > 0)
+    {
+        count -= 1;
+
+        if (mkdir(directories[count], 0775) && (errno != EEXIST))
+        {
+            result = false;
+            break;
+        }
+    }
+
+    sh_end_temporary_memory(temp_memory);
+
+    return result;
 #  else
     return false;
 #  endif

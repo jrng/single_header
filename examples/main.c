@@ -53,6 +53,8 @@ int main(void)
     allocator.data = NULL;
     allocator.func = c_default_allocator_func;
 
+    ShThreadContext *thread_context = sh_thread_context_create(allocator, ShMiB(1));
+
     {
         printf("--- sh_hash -------------\n");
 
@@ -85,6 +87,37 @@ int main(void)
 
         printf("\n");
     }
+
+    {
+        printf("--- sh_platform ---------\n");
+
+        printf("directory_exists(\"a/b/c\") = false\n");
+
+        if (sh_directory_exists(thread_context, ShStringLiteral("a/b/c")))
+        {
+            printf("  !!! expected this directory to not exist\n");
+        }
+
+        printf("file_exists(\"a/b/c/d.txt\") = false\n");
+
+        if (sh_file_exists(thread_context, ShStringLiteral("a/b/c/d.txt")))
+        {
+            printf("  !!! expected this file to not exist\n");
+        }
+
+        sh_create_directory(thread_context, ShStringLiteral("a/b/c"), true);
+
+        printf("directory_exists(\"a/b/c\") = true\n");
+
+        if (!sh_directory_exists(thread_context, ShStringLiteral("a/b/c")))
+        {
+            printf("  !!! expected this directory to exist\n");
+        }
+
+        // TODO: the directory will not be removed for now...
+    }
+
+    sh_thread_context_destroy(thread_context);
 
     return 0;
 }
