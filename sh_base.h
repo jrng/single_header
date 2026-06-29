@@ -238,6 +238,9 @@ SH_BASE_DEF bool sh_parse_integer(ShString *str, int64_t *value);
 
 SH_BASE_DEF usize sh_c_string_get_length(const char *str);
 
+SH_BASE_DEF bool sh_unicode_is_digit(uint32_t codepoint);
+SH_BASE_DEF bool sh_unicode_is_hexdigit(uint32_t codepoint);
+
 SH_BASE_DEF ShUnicodeResult sh_utf8_decode(ShString str, usize index);
 SH_BASE_DEF usize sh_utf8_encode(ShString str, usize index, uint32_t codepoint);
 SH_BASE_DEF ShUnicodeResult sh_utf16le_decode(ShString str, usize index);
@@ -923,6 +926,20 @@ sh_c_string_get_length(const char *str)
         while (*str++) result += 1;
     }
     return result;
+}
+
+SH_BASE_DEF bool
+sh_unicode_is_digit(uint32_t codepoint)
+{
+    return ((codepoint >= '0') && (codepoint <= '9'));
+}
+
+SH_BASE_DEF bool
+sh_unicode_is_hexdigit(uint32_t codepoint)
+{
+    return (((codepoint >= '0') && (codepoint <= '9')) ||
+            ((codepoint >= 'A') && (codepoint <= 'F')) ||
+            ((codepoint >= 'a') && (codepoint <= 'f')));
 }
 
 SH_BASE_DEF ShUnicodeResult
