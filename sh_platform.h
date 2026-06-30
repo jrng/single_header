@@ -23,6 +23,7 @@
 
 #    include <errno.h>
 #    include <fcntl.h>
+#    include <stdlib.h>
 #    include <unistd.h>
 #    include <sys/stat.h>
 
@@ -48,6 +49,8 @@ typedef struct
     uint64_t modification_time_ms;
 } ShFileInformation;
 
+SH_PLATFORM_DEF ShString sh_get_environment_variable(ShThreadContext *thread_context, ShAllocator allocator, ShString variable_name, ShString fallback);
+
 SH_PLATFORM_DEF bool sh_get_file_information(ShThreadContext *thread_context, ShString filename, ShFileInformation *information);
 
 SH_PLATFORM_DEF bool sh_file_exists(ShThreadContext *thread_context, ShString file_name);
@@ -61,6 +64,47 @@ SH_PLATFORM_DEF bool sh_write_entire_file(ShThreadContext *thread_context, ShStr
 #endif // __SH_PLATFORM_INCLUDE__
 
 #ifdef SH_PLATFORM_IMPLEMENTATION
+
+SH_PLATFORM_DEF ShString
+sh_get_environment_variable(ShThreadContext *thread_context, ShAllocator allocator, ShString variable_name, ShString fallback)
+{
+    ShString result = fallback;
+
+#  if SH_PLATFORM_WINDOWS
+    ShTemporaryMemory temp_memory = sh_begin_temporary_memory(thread_context, 1, &allocator);
+
+    LPCWSTR utf16_variable_name = (LPCWSTR) sh_string_to_c_string(temp_memory.allocator, variable_name);
+    DWORD count = GetEnvironmentVariableW(utf16_variable_name, NULL, 0);
+
+    if (count > 0)
+    {
+        LPWSTR variable = sh_alloc_array(allocator, WCHAR, count);
+        DWORD ret = GetEnvironmentVariableW(utf16_variable_name, variable, count);
+
+        if ((ret > 0) && (ret < count))
+        {
+            result = sh_string_utf16le_to_utf8(allocator, ShMakeString(ret, variable));
+        }
+    }
+
+    sh_end_temporary_memory(temp_memory);
+#  elif SH_PLATFORM_UNIX
+    (void) allocator;
+
+    ShTemporaryMemory temp_memory = sh_begin_temporary_memory(thread_context, 0, NULL);
+
+    char *variable = getenv(sh_string_to_c_string(temp_memory.allocator, variable_name));
+
+    if (variable)
+    {
+        result = ShCString(variable);
+    }
+
+    sh_end_temporary_memory(temp_memory);
+#  endif
+
+    return result;
+}
 
 SH_PLATFORM_DEF bool
 sh_get_file_information(ShThreadContext *thread_context, ShString filename, ShFileInformation *information)
