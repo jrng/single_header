@@ -173,6 +173,7 @@ sh_http_server_create(ShHttpServer *http_server, ShAllocator allocator, uint16_t
         return false;
     }
 
+    (void) port;
     assert(!"unimplemented");
 #  elif SH_PLATFORM_UNIX
     http_server->socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -530,6 +531,8 @@ sh_http_server_iterate(ShThreadContext *thread_context, ShHttpServer *http_serve
         }
     }
 #  else
+    (void) wait_for_event;
+    (void) current_client_count;
     assert(!"unimplemented");
 #  endif
 
