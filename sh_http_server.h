@@ -388,19 +388,19 @@ sh_http_server_iterate(ShThreadContext *thread_context, ShHttpServer *http_serve
                         {
                             ShHttpHeaderField *header_field = request.header_fields + j;
 
-                            if (sh_string_equal(header_field->name, ShStringLiteral("Connection")))
+                            if (sh_string_equal_ascii_case_insensitive(header_field->name, ShStringLiteral("Connection")))
                             {
                                 connection_field = header_field;
                             }
-                            else if (sh_string_equal(header_field->name, ShStringLiteral("Sec-WebSocket-Version")))
+                            else if (sh_string_equal_ascii_case_insensitive(header_field->name, ShStringLiteral("Sec-WebSocket-Version")))
                             {
                                 websocket_version_field = header_field;
                             }
-                            else if (sh_string_equal(header_field->name, ShStringLiteral("Sec-WebSocket-Key")))
+                            else if (sh_string_equal_ascii_case_insensitive(header_field->name, ShStringLiteral("Sec-WebSocket-Key")))
                             {
                                 websocket_key_field = header_field;
                             }
-                            else if (sh_string_equal(header_field->name, ShStringLiteral("Upgrade")))
+                            else if (sh_string_equal_ascii_case_insensitive(header_field->name, ShStringLiteral("Upgrade")))
                             {
                                 upgrade_field = header_field;
                             }

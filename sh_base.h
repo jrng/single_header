@@ -223,6 +223,7 @@ SH_BASE_DEF ShString sh_copy_string(ShAllocator allocator, ShString str);
 SH_BASE_DEF char *sh_string_to_c_string(ShAllocator allocator, ShString str);
 
 SH_BASE_DEF bool sh_string_equal(ShString a, ShString b);
+SH_BASE_DEF bool sh_string_equal_ascii_case_insensitive(ShString a, ShString b);
 SH_BASE_DEF bool sh_string_starts_with(ShString str, ShString prefix);
 SH_BASE_DEF bool sh_string_ends_with(ShString str, ShString suffix);
 
@@ -552,6 +553,38 @@ sh_string_equal(ShString a, ShString b)
     for (usize i = 0; i < a.count; i += 1)
     {
         if (a.data[i] != b.data[i])
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+SH_BASE_DEF bool
+sh_string_equal_ascii_case_insensitive(ShString a, ShString b)
+{
+    if (a.count != b.count)
+    {
+        return false;
+    }
+
+    for (usize i = 0; i < a.count; i += 1)
+    {
+        uint8_t ca = a.data[i];
+        uint8_t cb = b.data[i];
+
+        if ((ca >= 'A') && (ca <= 'Z'))
+        {
+            ca |= 0x20;
+        }
+
+        if ((cb >= 'A') && (cb <= 'Z'))
+        {
+            cb |= 0x20;
+        }
+
+        if (ca != cb)
         {
             return false;
         }
