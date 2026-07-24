@@ -187,13 +187,13 @@ typedef struct
 
 #  ifdef __cplusplus
 #    define sh_array_init(array, initial_allocated, allocator)  \
-        ((array) = (decltype(+(array))) sh_array_grow(array, initial_allocated, sizeof(*(array)), allocator))
+        ((array) = (decltype(+(array))) sh_array_grow(NULL, initial_allocated, sizeof(*(array)), allocator))
 #    define sh_array_ensure_space(array) \
         (((sh_array_count(array) + 1) > sh_array_allocated(array)) ? \
             (array) = (decltype(+(array))) sh_array_grow(array, 2 * sh_array_allocated(array), sizeof(*(array)), ShAllocator { NULL, NULL }) : NULL)
 #  else
 #    define sh_array_init(array, initial_allocated, allocator)  \
-        ((array) = sh_array_grow(array, initial_allocated, sizeof(*(array)), allocator))
+        ((array) = sh_array_grow(NULL, initial_allocated, sizeof(*(array)), allocator))
 #    define sh_array_ensure_space(array) \
         (((sh_array_count(array) + 1) > sh_array_allocated(array)) ? \
             (array) = sh_array_grow(array, 2 * sh_array_allocated(array), sizeof(*(array)), (ShAllocator) { NULL, NULL }) : NULL)
