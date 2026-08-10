@@ -3,6 +3,7 @@
 
 #ifdef SH_IMPLEMENTATION
 #  define SH_BASE_IMPLEMENTATION
+#  define SH_DRAW_IMPLEMENTATION
 #  define SH_HASH_IMPLEMENTATION
 #  define SH_BASE64_IMPLEMENTATION
 #  define SH_STRING_BUILDER_IMPLEMENTATION
@@ -11,6 +12,7 @@
 #endif // SH_IMPLEMENTATION
 
 #include "sh_base.h"
+#include "sh_draw.h"
 #include "sh_hash.h"
 #include "sh_base64.h"
 #include "sh_string_builder.h"

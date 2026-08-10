@@ -113,6 +113,14 @@ typedef struct
     uint8_t *data;
 } ShString;
 
+typedef struct
+{
+    float r;
+    float g;
+    float b;
+    float a;
+} ShColor;
+
 #  define ShStringFmt ".*s"
 #  define ShStringArg(str) (int) (str).count, (str).data
 
@@ -123,11 +131,13 @@ typedef struct
 #    define ShStringLiteral(str) ShString { sizeof(str) - 1, (uint8_t *) (str) }
 #    define ShCString(str) ShString { sh_c_string_get_length(str), (uint8_t *) (str) }
 #    define ShMakeString(count, ptr) ShString { (count), (uint8_t *) (ptr) }
+#    define ShMakeColor(r, g, b, a) ShColor { (r), (g), (b), (a) }
 #  else
 #    define ShStringEmpty (ShString) { 0, NULL }
 #    define ShStringLiteral(str) (ShString) { sizeof(str) - 1, (uint8_t *) (str) }
 #    define ShCString(str) (ShString) { sh_c_string_get_length(str), (uint8_t *) (str) }
 #    define ShMakeString(count, ptr) (ShString) { (count), (uint8_t *) (ptr) }
+#    define ShMakeColor(r, g, b, a) (ShColor) { (r), (g), (b), (a) }
 #  endif
 
 typedef struct
@@ -135,6 +145,28 @@ typedef struct
     uint32_t codepoint;
     uint32_t byte_count;
 } ShUnicodeResult;
+
+typedef enum
+{
+    SH_PIXEL_FORMAT_NONE  = 0,
+    SH_PIXEL_FORMAT_GRAY1 = 1,
+    SH_PIXEL_FORMAT_GRAY2 = 2,
+    SH_PIXEL_FORMAT_GRAY4 = 3,
+    SH_PIXEL_FORMAT_GRAY8 = 4,
+    // memory order: RR GG BB AA
+    SH_PIXEL_FORMAT_RGBA8 = 5,
+    // memory order: BB GG RR AA
+    SH_PIXEL_FORMAT_BGRA8 = 6,
+} ShPixelFormat;
+
+typedef struct
+{
+    int32_t width;
+    int32_t height;
+    int32_t stride;
+    ShPixelFormat format;
+    void *pixels;
+} ShImage;
 
 typedef enum
 {
@@ -256,6 +288,9 @@ SH_BASE_DEF ShUnicodeResult sh_utf16le_decode(ShString str, usize index);
 SH_BASE_DEF usize sh_utf16le_encode(ShString str, usize index, uint32_t codepoint);
 SH_BASE_DEF ShString sh_string_utf8_to_utf16le(ShAllocator allocator, ShString utf8_str);
 SH_BASE_DEF ShString sh_string_utf16le_to_utf8(ShAllocator allocator, ShString utf16_str);
+
+SH_BASE_DEF ShImage sh_allocate_image(ShAllocator allocator, ShPixelFormat format, int32_t width, int32_t height);
+SH_BASE_DEF uint8_t sh_get_bits_per_pixel(ShPixelFormat format);
 
 #endif // __SH_BASE_INCLUDE__
 
@@ -1259,6 +1294,58 @@ sh_string_utf16le_to_utf8(ShAllocator allocator, ShString utf16_str)
     }
 
     return result;
+}
+
+SH_BASE_DEF ShImage
+sh_allocate_image(ShAllocator allocator, ShPixelFormat format, int32_t width, int32_t height)
+{
+    ShImage image;
+    image.width  = width;
+    image.height = height;
+    image.stride = ((image.width * sh_get_bits_per_pixel(format)) + 7) / 8;
+    image.format = format;
+    image.pixels = sh_alloc(allocator, image.stride * image.height);
+
+    return image;
+}
+
+SH_BASE_DEF uint8_t
+sh_get_bits_per_pixel(ShPixelFormat format)
+{
+    switch (format)
+    {
+        case SH_PIXEL_FORMAT_NONE: break;
+
+        case SH_PIXEL_FORMAT_GRAY1:
+        {
+            return 1;
+        } break;
+
+        case SH_PIXEL_FORMAT_GRAY2:
+        {
+            return 2;
+        } break;
+
+        case SH_PIXEL_FORMAT_GRAY4:
+        {
+            return 4;
+        } break;
+
+        case SH_PIXEL_FORMAT_GRAY8:
+        {
+            return 8;
+        } break;
+
+        case SH_PIXEL_FORMAT_RGBA8:
+        case SH_PIXEL_FORMAT_BGRA8:
+        {
+            return 32;
+        } break;
+
+        default: assert(!"unimplemented"); break;
+    }
+
+    return 0;
 }
 
 #endif // SH_BASE_IMPLEMENTATION
