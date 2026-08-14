@@ -48,6 +48,7 @@ C_MAKE_ENTRY()
         {
             build_example("main");
             build_example("http_server");
+            build_example("images");
         } break;
 
         case CMakeTargetInstall:

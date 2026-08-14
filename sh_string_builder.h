@@ -34,6 +34,8 @@ SH_STRING_BUILDER_DEF void sh_string_builder_init(ShStringBuilder *builder, ShAl
 SH_STRING_BUILDER_DEF usize sh_string_builder_get_size(ShStringBuilder *builder);
 SH_STRING_BUILDER_DEF void sh_string_builder_append(ShStringBuilder *builder, ShStringBuilder *append);
 SH_STRING_BUILDER_DEF void sh_string_builder_append_u8(ShStringBuilder *builder, uint8_t c);
+SH_STRING_BUILDER_DEF void sh_string_builder_append_u16le(ShStringBuilder *builder, uint16_t value);
+SH_STRING_BUILDER_DEF void sh_string_builder_append_u32le(ShStringBuilder *builder, uint32_t value);
 SH_STRING_BUILDER_DEF void sh_string_builder_append_string(ShStringBuilder *builder, ShString str);
 SH_STRING_BUILDER_DEF void sh_string_builder_append_unsigned_number(ShStringBuilder *builder, uint64_t value,
                                                                     usize leading_character_count, uint8_t leading_character,
@@ -131,6 +133,22 @@ sh_string_builder_append_u8(ShStringBuilder *builder, uint8_t c)
     ShStringBuffer *buffer = builder->last_buffer;
     buffer->data[buffer->occupied] = c;
     buffer->occupied += 1;
+}
+
+SH_STRING_BUILDER_DEF void
+sh_string_builder_append_u16le(ShStringBuilder *builder, uint16_t value)
+{
+    sh_string_builder_append_u8(builder, (uint8_t) (value >> 0));
+    sh_string_builder_append_u8(builder, (uint8_t) (value >> 8));
+}
+
+SH_STRING_BUILDER_DEF void
+sh_string_builder_append_u32le(ShStringBuilder *builder, uint32_t value)
+{
+    sh_string_builder_append_u8(builder, (uint8_t) (value >> 0));
+    sh_string_builder_append_u8(builder, (uint8_t) (value >> 8));
+    sh_string_builder_append_u8(builder, (uint8_t) (value >> 16));
+    sh_string_builder_append_u8(builder, (uint8_t) (value >> 24));
 }
 
 SH_STRING_BUILDER_DEF void

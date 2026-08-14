@@ -9,6 +9,7 @@
 #  define SH_STRING_BUILDER_IMPLEMENTATION
 #  define SH_PLATFORM_IMPLEMENTATION
 #  define SH_HTTP_SERVER_IMPLEMENTATION
+#  define SH_IMAGE_BMP_IMPLEMENTATION
 #endif // SH_IMPLEMENTATION
 
 #include "sh_base.h"
@@ -18,6 +19,7 @@
 #include "sh_string_builder.h"
 #include "sh_platform.h"
 #include "sh_http_server.h"
+#include "sh_image_bmp.h"
 
 /*
 MIT License
