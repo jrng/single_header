@@ -128,8 +128,8 @@ SH_HTTP_SERVER_DEF void sh_http_server_destroy(ShHttpServer *http_server);
 
 #ifdef SH_HTTP_SERVER_IMPLEMENTATION
 
-#  define INPUT_BUFFER_SIZE ShKiB(4)
-#  define ARENA_CAPACITY ShKiB(64)
+#  define INPUT_BUFFER_SIZE ShKiB(16)
+#  define ARENA_CAPACITY ShKiB(256)
 
 #  if SH_PLATFORM_UNIX
 
