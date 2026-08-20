@@ -383,7 +383,6 @@ sh_http_server_iterate(ShThreadContext *thread_context, ShHttpServer *http_serve
                         ShHttpHeaderField *websocket_key_field = NULL;
                         ShHttpHeaderField *upgrade_field = NULL;
 
-                        // TODO: header field names are case-insensitive
                         for (usize j = 0; j < sh_array_count(request.header_fields); j += 1)
                         {
                             ShHttpHeaderField *header_field = request.header_fields + j;
