@@ -36,6 +36,35 @@ build_example(const char *name)
     c_make_command_run_and_reset(&command);
 }
 
+static void
+build_tool(const char *name)
+{
+    CMakeCommand command = { 0 };
+
+    const char *target_c_compiler = c_make_get_target_c_compiler();
+
+    c_make_command_append(&command, target_c_compiler);
+    c_make_command_append_command_line(&command, c_make_get_target_c_flags());
+    c_make_command_append_default_compiler_flags(&command, c_make_get_build_type());
+
+    if (c_make_get_target_platform() == CMakePlatformLinux)
+    {
+        c_make_command_append(&command, "-std=gnu99", "-Wall", "-Wextra", "-pedantic");
+    }
+    else if (!c_make_compiler_is_msvc(target_c_compiler))
+    {
+        c_make_command_append(&command, "-std=c99", "-Wall", "-Wextra", "-pedantic");
+    }
+
+    c_make_command_append(&command, c_make_c_string_concat("-I", c_make_get_source_path()));
+    c_make_command_append_output_executable(&command, c_make_c_string_path_concat(c_make_get_build_path(), name), c_make_get_target_platform());
+    c_make_command_append(&command, c_make_c_string_path_concat(c_make_get_source_path(), "tools", c_make_c_string_concat(name, ".c")));
+    c_make_command_append_default_linker_flags(&command, c_make_get_target_architecture());
+
+    c_make_log(CMakeLogLevelInfo, "compile '%s.c'\n", name);
+    c_make_command_run_and_reset(&command);
+}
+
 C_MAKE_ENTRY()
 {
     switch (c_make_target)
@@ -49,6 +78,8 @@ C_MAKE_ENTRY()
             build_example("main");
             build_example("http_server");
             build_example("images");
+
+            build_tool("bdf2h");
         } break;
 
         case CMakeTargetInstall:

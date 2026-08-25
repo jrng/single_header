@@ -19,6 +19,7 @@ SH_DRAW_DEF void sh_image_clear(ShImage image, ShColor clear_color);
 SH_DRAW_DEF void sh_image_set_pixel(ShImage image, int32_t x, int32_t y, ShColor color);
 
 SH_DRAW_DEF void sh_image_stroke_line(ShImage image, int32_t x0, int32_t y0, int32_t x1, int32_t y1, ShColor color);
+SH_DRAW_DEF int32_t sh_image_fill_string(ShImage image, ShFont font, uint16_t scale, int32_t x, int32_t y, ShString str, ShColor color);
 
 #endif // __SH_DRAW_INCLUDE__
 
@@ -268,6 +269,75 @@ sh_image_stroke_line(ShImage image, int32_t x0, int32_t y0, int32_t x1, int32_t 
             y0 += sy;
         }
     }
+}
+
+SH_DRAW_DEF int32_t
+sh_image_fill_string(ShImage image, ShFont font, uint16_t scale, int32_t x, int32_t y, ShString str, ShColor color)
+{
+    int32_t advance = 0;
+    usize index = 0;
+
+    uint32_t stride = (font.texture_width + 7) / 8;
+
+    while (index < str.count)
+    {
+        ShUnicodeResult utf8 = sh_utf8_decode(str, index);
+        index += utf8.byte_count;
+
+        ShGlyph *glyph = NULL;
+
+        for (uint32_t i = 0; i < font.glyph_count; i += 1)
+        {
+            ShGlyph *g = font.glyphs + i;
+
+            if (g->codepoint == utf8.codepoint)
+            {
+                glyph = g;
+                break;
+            }
+        }
+
+        if (glyph)
+        {
+            int32_t dst_y = y - scale * (glyph->bound_height - glyph->y_offset);
+
+            for (uint16_t glyph_y = 0; glyph_y < glyph->bound_height; glyph_y += 1)
+            {
+                uint32_t src_y = glyph->y + glyph_y;
+
+                for (uint16_t i = 0; i < scale; i += 1)
+                {
+                    int32_t dst_x = x + scale * glyph->x_offset;
+
+                    for (uint16_t glyph_x = 0; glyph_x < glyph->bound_width; glyph_x += 1)
+                    {
+                        uint32_t src_x = glyph->x + glyph_x;
+
+                        for (uint16_t j = 0; j < scale; j += 1)
+                        {
+                            uint8_t *byte = font.texture_data + (src_y * stride) + (src_x / 8);
+
+                            if ((0x80 >> (src_x % 8)) & *byte)
+                            {
+                                sh_image_set_pixel(image, dst_x, dst_y, color);
+                            }
+
+                            dst_x += 1;
+                        }
+                    }
+
+                    dst_y += 1;
+                }
+            }
+
+            int32_t x_advance = scale * glyph->x_advance;
+
+            x += x_advance;
+            advance += x_advance;
+        }
+    }
+
+    return advance;
 }
 
 #endif // SH_DRAW_IMPLEMENTATION

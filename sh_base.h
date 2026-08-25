@@ -168,6 +168,30 @@ typedef struct
     void *pixels;
 } ShImage;
 
+typedef struct
+{
+    uint32_t codepoint;
+    uint16_t x_advance;
+    int16_t x_offset;
+    int16_t y_offset;
+    uint16_t bound_width;
+    uint16_t bound_height;
+    uint16_t x;
+    uint16_t y;
+} ShGlyph;
+
+typedef struct
+{
+    uint16_t size;
+    int16_t ascent;
+    int16_t descent;
+    uint16_t texture_width;
+    uint16_t texture_height;
+    uint32_t glyph_count;
+    ShGlyph *glyphs;
+    uint8_t *texture_data;
+} ShFont;
+
 typedef enum
 {
     SH_ALLOCATOR_ACTION_ALLOC   = 0,
