@@ -3,7 +3,6 @@
 #include "sh.h"
 
 #include <stdio.h>
-#include <stdlib.h>
 
 void *c_default_allocator_func(void *allocator_data, ShAllocatorAction action, usize old_size, usize size, void *ptr)
 {
