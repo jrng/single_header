@@ -296,6 +296,7 @@ sh_string_builder_append_formated_valist(ShStringBuilder *builder, ShString form
 {
     for (usize index = 0; index < format.count; index += 1)
     {
+        usize start_index = index;
         uint8_t c = format.data[index];
 
         if (c == '%')
@@ -384,6 +385,63 @@ sh_string_builder_append_formated_valist(ShStringBuilder *builder, ShString form
                         {
                             sh_string_builder_append_u8(builder, '%');
                             sh_string_builder_append_u8(builder, 'z');
+                        }
+                    } break;
+
+                    case '0':
+                    {
+                        index += 1;
+
+                        usize width = 0;
+
+                        while ((index < format.count) && (format.data[index] >= '0') && (format.data[index] <= '9'))
+                        {
+                            width = (10 * width) + (format.data[index] - '0');
+                            index += 1;
+                        }
+
+                        if (index < format.count)
+                        {
+                            c = format.data[index];
+
+                            switch (c)
+                            {
+                                case 'd':
+                                case 'i':
+                                {
+                                    sh_string_builder_append_signed_number(builder, va_arg(args, int), width, '0', 10, false);
+                                } break;
+
+                                case 'x':
+                                {
+                                    sh_string_builder_append_unsigned_number(builder, va_arg(args, unsigned int), width, '0', 16, false);
+                                } break;
+
+                                case 'X':
+                                {
+                                    sh_string_builder_append_unsigned_number(builder, va_arg(args, unsigned int), width, '0', 16, true);
+                                } break;
+
+                                case 'u':
+                                {
+                                    sh_string_builder_append_unsigned_number(builder, va_arg(args, unsigned int), width, '0', 10, false);
+                                } break;
+
+                                default:
+                                {
+                                    for (usize i = start_index; i <= index; i += 1)
+                                    {
+                                        sh_string_builder_append_u8(builder, format.data[i]);
+                                    }
+                                } break;
+                            }
+                        }
+                        else
+                        {
+                            for (usize i = start_index; i < index; i += 1)
+                            {
+                                sh_string_builder_append_u8(builder, format.data[i]);
+                            }
                         }
                     } break;
 
