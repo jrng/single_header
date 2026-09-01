@@ -128,16 +128,16 @@ typedef struct
 
 #  ifdef __cplusplus
 #    define ShStringEmpty ShString {}
-#    define ShStringLiteral(str) ShString { sizeof(str) - 1, (uint8_t *) (str) }
-#    define ShCString(str) ShString { sh_c_string_get_length(str), (uint8_t *) (str) }
-#    define ShMakeString(count, ptr) ShString { (count), (uint8_t *) (ptr) }
-#    define ShMakeColor(r, g, b, a) ShColor { (r), (g), (b), (a) }
+#    define ShStringLiteral(str) (ShString { sizeof(str) - 1, (uint8_t *) (str) })
+#    define ShCString(str) (ShString { sh_c_string_get_length(str), (uint8_t *) (str) })
+#    define ShMakeString(count, ptr) (ShString { (count), (uint8_t *) (ptr) })
+#    define ShMakeColor(r, g, b, a) (ShColor { (r), (g), (b), (a) })
 #  else
-#    define ShStringEmpty (ShString) { 0, NULL }
-#    define ShStringLiteral(str) (ShString) { sizeof(str) - 1, (uint8_t *) (str) }
-#    define ShCString(str) (ShString) { sh_c_string_get_length(str), (uint8_t *) (str) }
-#    define ShMakeString(count, ptr) (ShString) { (count), (uint8_t *) (ptr) }
-#    define ShMakeColor(r, g, b, a) (ShColor) { (r), (g), (b), (a) }
+#    define ShStringEmpty ((ShString) { 0, NULL })
+#    define ShStringLiteral(str) ((ShString) { sizeof(str) - 1, (uint8_t *) (str) })
+#    define ShCString(str) ((ShString) { sh_c_string_get_length(str), (uint8_t *) (str) })
+#    define ShMakeString(count, ptr) ((ShString) { (count), (uint8_t *) (ptr) })
+#    define ShMakeColor(r, g, b, a) ((ShColor) { (r), (g), (b), (a) })
 #  endif
 
 typedef struct
