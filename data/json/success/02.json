@@ -1,0 +1,9 @@
+{
+    "array": [],
+    "object": {},
+    "string": "hello world",
+    "integer_number": 123456,
+    "float_number": 3.14,
+    "boolean": false,
+    "null": null
+}
