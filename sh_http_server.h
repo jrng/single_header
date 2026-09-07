@@ -326,14 +326,13 @@ sh_http_server_iterate(ShThreadContext *thread_context, ShHttpServer *http_serve
             {
                 sh_arena_clear(&client->arena);
 
-                ssize_t ret;
                 bool has_request = true;
 
                 for (;;)
                 {
-                    ret = read(client->socket, client->input_buffer.data + client->input_buffer.count, INPUT_BUFFER_SIZE - client->input_buffer.count);
+                    ssize_t bytes_read = read(client->socket, client->input_buffer.data + client->input_buffer.count, INPUT_BUFFER_SIZE - client->input_buffer.count);
 
-                    if (ret < 0)
+                    if (bytes_read < 0)
                     {
                         if (errno != EAGAIN)
                         {
@@ -342,7 +341,7 @@ sh_http_server_iterate(ShThreadContext *thread_context, ShHttpServer *http_serve
 
                         break;
                     }
-                    else if (ret == 0)
+                    else if (bytes_read == 0)
                     {
                         close(client->socket);
                         *sh_array_append(clients_to_delete) = i;
@@ -352,7 +351,7 @@ sh_http_server_iterate(ShThreadContext *thread_context, ShHttpServer *http_serve
                     }
                     else
                     {
-                        client->input_buffer.count += ret;
+                        client->input_buffer.count += bytes_read;
                     }
                 }
 
@@ -488,9 +487,9 @@ sh_http_server_iterate(ShThreadContext *thread_context, ShHttpServer *http_serve
                 {
                     ShStringBuffer *buffer = client->output_builder.first_buffer;
 
-                    ssize_t ret = write(client->socket, buffer->data + client->output_cursor, buffer->occupied + client->output_cursor);
+                    ssize_t bytes_written = write(client->socket, buffer->data + client->output_cursor, buffer->occupied + client->output_cursor);
 
-                    if (ret < 0)
+                    if (bytes_written < 0)
                     {
                         if (errno == EWOULDBLOCK)
                         {
@@ -501,7 +500,7 @@ sh_http_server_iterate(ShThreadContext *thread_context, ShHttpServer *http_serve
                     }
                     else
                     {
-                        client->output_cursor += ret;
+                        client->output_cursor += bytes_written;
 
                         if (client->output_cursor == buffer->occupied)
                         {

@@ -418,7 +418,7 @@ sh_json_parser_get_next_element(ShJsonParser *parser, ShJsonElement *element)
 
                 while (parser->index < parser->input.count)
                 {
-                    uint8_t c = parser->input.data[parser->index];
+                    c = parser->input.data[parser->index];
 
                     if (escaping)
                     {

@@ -155,31 +155,31 @@ sh_hash_sha1(usize size, void const *data)
 
     uint8_t chunk[64];
 
-    usize i = 0;
+    usize index = 0;
 
-    for (; i < size; i += 1)
+    for (; index < size; index += 1)
     {
-        chunk[i] = at[i];
+        chunk[index] = at[index];
     }
 
-    chunk[i] = 0x80;
-    i += 1;
+    chunk[index] = 0x80;
+    index += 1;
 
     if (size >= 56)
     {
-        for (; i < 64; i += 1)
+        for (; index < 64; index += 1)
         {
-            chunk[i] = 0;
+            chunk[index] = 0;
         }
 
         sh_hash_sha1_round(chunk);
 
-        i = 0;
+        index = 0;
     }
 
-    for (; i < 56; i += 1)
+    for (; index < 56; index += 1)
     {
-        chunk[i] = 0;
+        chunk[index] = 0;
     }
 
     chunk[56] = (uint8_t) (size_in_bits >> 56);

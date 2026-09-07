@@ -179,7 +179,7 @@ sh_string_builder_append_string(ShStringBuilder *builder, ShString str)
     {
         _sh_string_builder_expand(builder);
 
-        ShStringBuffer *buffer = builder->last_buffer;
+        buffer = builder->last_buffer;
         usize bytes_to_write = ShArrayCount(buffer->data);
 
         if (bytes_to_write > count)
