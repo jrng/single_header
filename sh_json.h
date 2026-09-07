@@ -69,8 +69,6 @@ SH_JSON_DEF ShJsonResult sh_json_parser_get_next_element(ShJsonParser *parser, S
 
 #ifdef SH_JSON_IMPLEMENTATION
 
-#include <math.h>
-
 SH_JSON_DEF ShString
 sh_json_escape_string(ShAllocator allocator, ShString str)
 {
@@ -593,7 +591,7 @@ sh_json_parser_get_next_element(ShJsonParser *parser, ShJsonElement *element)
                         return SH_JSON_RESULT_ERROR;
                     }
 
-                    int64_t exponent = 0;
+                    uint64_t exponent = 0;
 
                     while ((parser->index < parser->input.count) && sh_unicode_is_digit(parser->input.data[parser->index]))
                     {
@@ -604,10 +602,18 @@ sh_json_parser_get_next_element(ShJsonParser *parser, ShJsonElement *element)
 
                     if (exponent_is_signed)
                     {
-                        exponent = -exponent;
+                        for (uint64_t i = 0; i < exponent; i += 1)
+                        {
+                            float_value /= 10.0;
+                        }
                     }
-
-                    float_value = float_value * pow(10.0, (double) exponent);
+                    else
+                    {
+                        for (uint64_t i = 0; i < exponent; i += 1)
+                        {
+                            float_value *= 10.0;
+                        }
+                    }
                 }
 
                 _sh_json_handle_comma(parser);
