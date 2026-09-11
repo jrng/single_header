@@ -19,6 +19,7 @@ SH_DRAW_DEF void sh_image_clear(ShImage image, ShColor clear_color);
 SH_DRAW_DEF void sh_image_set_pixel(ShImage image, int32_t x, int32_t y, ShColor color);
 
 SH_DRAW_DEF void sh_image_stroke_line(ShImage image, int32_t x0, int32_t y0, int32_t x1, int32_t y1, ShColor color);
+SH_DRAW_DEF void sh_image_fill_rect(ShImage image, int32_t x0, int32_t y0, int32_t x1, int32_t y1, ShColor color);
 SH_DRAW_DEF int32_t sh_image_fill_string(ShImage image, ShFont font, uint16_t scale, int32_t x, int32_t y, ShString str, ShColor color);
 
 #endif // __SH_DRAW_INCLUDE__
@@ -267,6 +268,23 @@ sh_image_stroke_line(ShImage image, int32_t x0, int32_t y0, int32_t x1, int32_t 
         {
             err += dx;
             y0 += sy;
+        }
+    }
+}
+
+SH_DRAW_DEF void
+sh_image_fill_rect(ShImage image, int32_t x0, int32_t y0, int32_t x1, int32_t y1, ShColor color)
+{
+    if (x0 < 0)  x0 = 0;
+    if (y0 < 0)  y0 = 0;
+    if (x1 >= image.width)  x1 = image.width;
+    if (y1 >= image.height)  y1 = image.height;
+
+    for (int32_t y = y0; y < y1; y += 1)
+    {
+        for (int32_t x = x0; x < x1; x += 1)
+        {
+            sh_image_set_pixel(image, x, y, color);
         }
     }
 }

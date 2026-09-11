@@ -37,6 +37,7 @@ draw_image(ShImage image)
     sh_image_stroke_line(image, 24, 21, 32, 25, ShMakeColor(0.0f, 1.0f, 0.0f, 1.0f));
     sh_image_stroke_line(image, 15, 30, 24, 26, ShMakeColor(0.0f, 0.0f, 1.0f, 1.0f));
     sh_image_stroke_line(image, 24, 26, 32, 30, ShMakeColor(0.0f, 0.0f, 1.0f, 1.0f));
+    sh_image_fill_rect(image, 20, 34, 28, 42, ShMakeColor(1.0f, 0.0f, 1.0f, 1.0f));
 }
 
 int main(void)
