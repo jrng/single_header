@@ -117,7 +117,7 @@ typedef struct
 // Creates an http server and starts listening to the given port.
 SH_HTTP_SERVER_DEF bool sh_http_server_create(ShHttpServer *http_server, ShAllocator allocator, uint16_t port, uint16_t max_client_count, void *user_data, ShHttpRequestCallback handle_request);
 
-SH_HTTP_SERVER_DEF void sh_http_server_iterate(ShThreadContext *thread_context, ShHttpServer *http_server, bool wait_for_event);
+SH_HTTP_SERVER_DEF void sh_http_server_iterate(ShThreadContext *thread_context, ShHttpServer *http_server, int32_t timeout_in_ms);
 
 SH_HTTP_SERVER_DEF bool sh_http_parse_request(ShHttpRequest *request, ShString request_string);
 
@@ -251,7 +251,7 @@ sh_http_server_create(ShHttpServer *http_server, ShAllocator allocator, uint16_t
 }
 
 SH_HTTP_SERVER_DEF void
-sh_http_server_iterate(ShThreadContext *thread_context, ShHttpServer *http_server, bool wait_for_event)
+sh_http_server_iterate(ShThreadContext *thread_context, ShHttpServer *http_server, int32_t timeout_in_ms)
 {
     ShTemporaryMemory temp_memory = sh_begin_temporary_memory(thread_context, 0, NULL);
 
@@ -276,14 +276,7 @@ sh_http_server_iterate(ShThreadContext *thread_context, ShHttpServer *http_serve
         sockets[i + 1].revents = 0;
     }
 
-    int timeout = 0;
-
-    if (wait_for_event)
-    {
-        timeout = -1;
-    }
-
-    int ret = poll(sockets, current_client_count + 1, timeout);
+    int ret = poll(sockets, current_client_count + 1, timeout_in_ms);
 
     if (ret > 0)
     {
@@ -529,7 +522,7 @@ sh_http_server_iterate(ShThreadContext *thread_context, ShHttpServer *http_serve
         }
     }
 #  else
-    (void) wait_for_event;
+    (void) timeout_in_ms;
     (void) current_client_count;
     assert(!"unimplemented");
 #  endif
