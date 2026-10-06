@@ -94,7 +94,7 @@ typedef struct
 #  endif
 } ShHttpClient;
 
-typedef void (*ShHttpRequestCallback)(void *user_data, ShHttpRequest request, ShStringBuilder *response);
+typedef void (*ShHttpRequestCallback)(ShThreadContext *thread_context, void *user_data, ShHttpRequest request, ShStringBuilder *response);
 
 typedef struct
 {
@@ -450,7 +450,7 @@ sh_http_server_iterate(ShThreadContext *thread_context, ShHttpServer *http_serve
                         if ((sh_string_builder_get_size(&client->output_builder) == 0) &&
                             http_server->handle_request)
                         {
-                            http_server->handle_request(http_server->user_data, request, &client->output_builder);
+                            http_server->handle_request(thread_context, http_server->user_data, request, &client->output_builder);
                         }
 
                         if (sh_string_builder_get_size(&client->output_builder) == 0)

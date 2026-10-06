@@ -29,8 +29,9 @@ void *c_default_allocator_func(void *allocator_data, ShAllocatorAction action, u
 }
 
 static void
-handle_http_request(void *user_data, ShHttpRequest request, ShStringBuilder *output)
+handle_http_request(ShThreadContext *thread_context, void *user_data, ShHttpRequest request, ShStringBuilder *output)
 {
+    (void) thread_context;
     (void) user_data;
 
     if (sh_string_equal(request.uri, ShStringLiteral("/")))
