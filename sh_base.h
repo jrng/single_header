@@ -282,6 +282,7 @@ SH_BASE_DEF bool sh_string_equal(ShString a, ShString b);
 SH_BASE_DEF bool sh_string_equal_ascii_case_insensitive(ShString a, ShString b);
 SH_BASE_DEF bool sh_string_starts_with(ShString str, ShString prefix);
 SH_BASE_DEF bool sh_string_ends_with(ShString str, ShString suffix);
+SH_BASE_DEF usize sh_string_find(ShString str, ShString pattern);
 
 #  define sh_string_concat(thread_context, allocator, ...) sh_string_concat_n(thread_context, allocator, ShArgCount(__VA_ARGS__), __VA_ARGS__)
 #  define sh_string_path_concat(thread_context, allocator, ...) sh_string_path_concat_n(thread_context, allocator, ShArgCount(__VA_ARGS__), __VA_ARGS__)
@@ -680,6 +681,32 @@ sh_string_ends_with(ShString str, ShString suffix)
     end.data  = str.data + (str.count - suffix.count);
 
     return sh_string_equal(end, suffix);
+}
+
+SH_BASE_DEF usize
+sh_string_find(ShString str, ShString pattern)
+{
+    if (pattern.count > str.count)
+    {
+        return str.count;
+    }
+
+    usize count = str.count - pattern.count;
+
+    ShString slice;
+    slice.count = pattern.count;
+
+    for (usize index = 0; index < count; index += 1)
+    {
+        slice.data = str.data + index;
+
+        if (sh_string_equal(slice, pattern))
+        {
+            return index;
+        }
+    }
+
+    return str.count;
 }
 
 SH_BASE_DEF ShString
