@@ -8,6 +8,8 @@
 #    error "sh_json.h requires sh_base.h to be included first"
 #  endif
 
+#  include <stdio.h> // TODO: remove
+
 #  if defined(SH_STATIC) || defined(SH_JSON_STATIC)
 #    define SH_JSON_DEF static
 #  else
@@ -35,6 +37,61 @@ typedef struct
     } value;
 } ShJsonElement;
 
+typedef enum
+{
+    SH_JSON_FLAG_ALLOW_SINGLE_LINE_COMMENTS = (1 << 0),
+    SH_JSON_FLAG_ALLOW_MULTI_LINE_COMMENTS  = (1 << 1),
+    SH_JSON_FLAG_ALLOW_TRAILING_COMMAS      = (1 << 2),
+
+    // If parsing fails don't free all nodes that were already created.
+    // This is useful if the memory allocator passed is an arena,
+    // which can just be resetted.
+    SH_JSON_FLAG_DONT_FREE_NODES_ON_FAILURE = (1 << 3),
+
+    SH_JSON_FLAG_SPEC_STANDARD              = 0,
+    SH_JSON_FLAG_SPEC_JSONC                 = SH_JSON_FLAG_ALLOW_SINGLE_LINE_COMMENTS |
+                                              SH_JSON_FLAG_ALLOW_MULTI_LINE_COMMENTS |
+                                              SH_JSON_FLAG_ALLOW_TRAILING_COMMAS,
+} ShJsonFlags;
+
+typedef enum
+{
+    SH_JSON_VALUE_TYPE_ARRAY          = 0,
+    SH_JSON_VALUE_TYPE_OBJECT         = 1,
+    SH_JSON_VALUE_TYPE_STRING         = 2,
+    SH_JSON_VALUE_TYPE_NUMBER_INTEGER = 3,
+    SH_JSON_VALUE_TYPE_NUMBER_FLOAT   = 4,
+    SH_JSON_VALUE_TYPE_BOOLEAN        = 5,
+    SH_JSON_VALUE_TYPE_NULL           = 6,
+} ShJsonValueType;
+
+typedef enum
+{
+    SH_JSON_NODE_FLAG_NAME_NEEDS_ESCAPING  = (1 << 0),
+    SH_JSON_NODE_FLAG_VALUE_NEEDS_ESCAPING = (1 << 1),
+} ShJsonNodeFlags;
+
+typedef struct ShJsonNode ShJsonNode;
+
+struct ShJsonNode
+{
+    ShJsonValueType type;
+    uint32_t flags;
+    ShString name;
+    uint32_t count;
+
+    ShList list;
+
+    union
+    {
+        ShString string;
+        int64_t number_integer;
+        double number_float;
+        bool boolean;
+        ShList children;
+    } value;
+};
+
 typedef struct
 {
     uint8_t depth;
@@ -42,6 +99,8 @@ typedef struct
     uint64_t is_object;
     uint64_t is_first;
 
+    uint32_t flags;
+    uint32_t line;
     usize index;
     ShString input;
 } ShJsonParser;
@@ -64,6 +123,8 @@ typedef enum
 SH_JSON_DEF ShString sh_json_escape_string(ShAllocator allocator, ShString str);
 SH_JSON_DEF void sh_json_parser_init(ShJsonParser *parser, ShString json_str);
 SH_JSON_DEF ShJsonResult sh_json_parser_get_next_element(ShJsonParser *parser, ShJsonElement *element);
+SH_JSON_DEF ShJsonNode *sh_json_parse(ShAllocator allocator, ShString json_str, uint32_t flags);
+SH_JSON_DEF void sh_json_free_node(ShAllocator allocator, ShJsonNode *node);
 
 #endif // __SH_JSON_INCLUDE__
 
@@ -182,6 +243,7 @@ sh_json_parser_init(ShJsonParser *parser, ShString json_str)
     parser->comma_after_last_element = false;
     parser->is_object = 0;
     parser->is_first = 1;
+    parser->line = 1;
     parser->index = 0;
     parser->input = json_str;
 }
@@ -211,6 +273,8 @@ _sh_json_skip_whitespaces(ShJsonParser *parser)
             break;
         }
 
+        if (c == '\n')  parser->line += 1;
+
         parser->index += 1;
     }
 }
@@ -227,6 +291,79 @@ _sh_json_handle_comma(ShJsonParser *parser)
     {
         parser->comma_after_last_element = false;
     }
+}
+
+static bool
+_sh_json_parse_string(ShJsonParser *parser, ShString *str, bool *needs_escaping)
+{
+    if (!_sh_json_matches(parser, '"'))
+    {
+        fprintf(stderr, "line %u: error: expected string.\n", parser->line);
+        return false;
+    }
+
+    str->count = 0;
+    str->data  = parser->input.data + parser->index;
+
+    bool escaping = false;
+    *needs_escaping = false;
+
+    while (parser->index < parser->input.count)
+    {
+        uint8_t c = parser->input.data[parser->index];
+
+        if (escaping)
+        {
+            if ((c == '"') || (c == '\\') || (c == '/') || (c == 'b') ||
+                (c == 'f') || (c == 'n') || (c == 'r') || (c == 't'))
+            {
+            }
+            else if (c == 'u')
+            {
+                if (((parser->index + 5) > parser->input.count) ||
+                    !sh_unicode_is_hexdigit(parser->input.data[parser->index + 1]) ||
+                    !sh_unicode_is_hexdigit(parser->input.data[parser->index + 2]) ||
+                    !sh_unicode_is_hexdigit(parser->input.data[parser->index + 3]) ||
+                    !sh_unicode_is_hexdigit(parser->input.data[parser->index + 4]))
+                {
+                    fprintf(stderr, "line %u: error: expected \\u to be followed by a 4-digit hex number.\n", parser->line);
+                    return false;
+                }
+
+                parser->index += 4;
+            }
+            else
+            {
+                fprintf(stderr, "line %u: error: unknown escape character '%c'.\n", parser->line, c);
+                return false;
+            }
+
+            escaping = false;
+        }
+        else
+        {
+            if (c == '\\')
+            {
+                escaping = true;
+                *needs_escaping = true;
+            }
+            else if (c == '"')
+            {
+                str->count = (parser->input.data + parser->index) - str->data;
+                break;
+            }
+        }
+
+        parser->index += 1;
+    }
+
+    if (!_sh_json_matches(parser, '"'))
+    {
+        fprintf(stderr, "line %u: error: string is missing closing '\"'.\n", parser->line);
+        return false;
+    }
+
+    return true;
 }
 
 SH_JSON_DEF ShJsonResult
@@ -544,11 +681,6 @@ sh_json_parser_get_next_element(ShJsonParser *parser, ShJsonElement *element)
                     }
                 }
 
-                if (is_signed)
-                {
-                    integer_value = -integer_value;
-                }
-
                 double float_value = (double) integer_value;
 
                 if (_sh_json_matches(parser, '.'))
@@ -620,11 +752,21 @@ sh_json_parser_get_next_element(ShJsonParser *parser, ShJsonElement *element)
 
                 if (is_float)
                 {
+                    if (is_signed)
+                    {
+                        float_value = -float_value;
+                    }
+
                     element->value.number_float = float_value;
                     return SH_JSON_RESULT_NUMBER_FLOAT;
                 }
                 else
                 {
+                    if (is_signed)
+                    {
+                        integer_value = -integer_value;
+                    }
+
                     element->value.number_integer = integer_value;
                     return SH_JSON_RESULT_NUMBER_INTEGER;
                 }
@@ -633,6 +775,454 @@ sh_json_parser_get_next_element(ShJsonParser *parser, ShJsonElement *element)
     }
 
     return SH_JSON_RESULT_ERROR;
+}
+
+static inline ShJsonNode *
+_sh_json_alloc_node(ShAllocator allocator, ShJsonValueType type)
+{
+    ShJsonNode *node = sh_alloc_type(allocator, ShJsonNode);
+
+    node->type         = type;
+    node->flags        = 0;
+    node->name         = ShStringEmpty;
+    node->count        = 0;
+    node->list.prev    = NULL;
+    node->list.next    = NULL;
+    node->value.string = ShStringEmpty;
+
+    return node;
+}
+
+SH_JSON_DEF void
+sh_json_free_node(ShAllocator allocator, ShJsonNode *node)
+{
+    if ((node->type == SH_JSON_VALUE_TYPE_ARRAY) || (node->type == SH_JSON_VALUE_TYPE_OBJECT))
+    {
+        ShDListForEach(ShList, child, &node->value.children)
+        {
+            sh_json_free_node(allocator, ShContainerOf(child, ShJsonNode, list));
+        }
+    }
+
+    sh_free(allocator, node);
+}
+
+static ShJsonNode *
+_sh_json_parse_value(ShAllocator allocator, ShJsonParser *parser)
+{
+    _sh_json_skip_whitespaces(parser);
+
+    if (parser->index >= parser->input.count)
+    {
+        fprintf(stderr, "line %u: error: expected value.\n", parser->line);
+        return NULL;
+    }
+
+    ShJsonNode *node = NULL;
+
+    uint8_t c = parser->input.data[parser->index];
+
+    switch (c)
+    {
+        case '[':
+        {
+            parser->index += 1;
+
+            _sh_json_skip_whitespaces(parser);
+
+            node = _sh_json_alloc_node(allocator, SH_JSON_VALUE_TYPE_ARRAY);
+            ShDListInit(&node->value.children);
+
+            if (!_sh_json_matches(parser, ']'))
+            {
+                ShJsonNode *child = _sh_json_parse_value(allocator, parser);
+
+                if (!child)
+                {
+                    if (!(parser->flags & SH_JSON_FLAG_DONT_FREE_NODES_ON_FAILURE))
+                    {
+                        sh_json_free_node(allocator, node);
+                    }
+
+                    return NULL;
+                }
+
+                node->count += 1;
+                ShDListInsertBefore(&node->value.children, &child->list);
+
+                while (_sh_json_matches(parser, ','))
+                {
+                    child = _sh_json_parse_value(allocator, parser);
+
+                    if (!child)
+                    {
+                        if (!(parser->flags & SH_JSON_FLAG_DONT_FREE_NODES_ON_FAILURE))
+                        {
+                            sh_json_free_node(allocator, node);
+                        }
+
+                        return NULL;
+                    }
+
+                    node->count += 1;
+                    ShDListInsertBefore(&node->value.children, &child->list);
+                }
+
+                if (!_sh_json_matches(parser, ']'))
+                {
+                    fprintf(stderr, "line %u: error: array is missing closing ']'.\n", parser->line);
+
+                    if (!(parser->flags & SH_JSON_FLAG_DONT_FREE_NODES_ON_FAILURE))
+                    {
+                        sh_json_free_node(allocator, node);
+                    }
+
+                    return NULL;
+                }
+            }
+        } break;
+
+        case '{':
+        {
+            parser->index += 1;
+
+            _sh_json_skip_whitespaces(parser);
+
+            node = _sh_json_alloc_node(allocator, SH_JSON_VALUE_TYPE_OBJECT);
+            ShDListInit(&node->value.children);
+
+            if (!_sh_json_matches(parser, '}'))
+            {
+                _sh_json_skip_whitespaces(parser);
+
+                ShString name;
+                bool name_needs_escaping;
+
+                if (!_sh_json_parse_string(parser, &name, &name_needs_escaping))
+                {
+                    if (!(parser->flags & SH_JSON_FLAG_DONT_FREE_NODES_ON_FAILURE))
+                    {
+                        sh_json_free_node(allocator, node);
+                    }
+
+                    return NULL;
+                }
+
+                _sh_json_skip_whitespaces(parser);
+
+                if (!_sh_json_matches(parser, ':'))
+                {
+                    fprintf(stderr, "line %u: error: expected ':' after object member name.\n", parser->line);
+
+                    if (!(parser->flags & SH_JSON_FLAG_DONT_FREE_NODES_ON_FAILURE))
+                    {
+                        sh_json_free_node(allocator, node);
+                    }
+
+                    return NULL;
+                }
+
+                ShJsonNode *child = _sh_json_parse_value(allocator, parser);
+
+                if (!child)
+                {
+                    if (!(parser->flags & SH_JSON_FLAG_DONT_FREE_NODES_ON_FAILURE))
+                    {
+                        sh_json_free_node(allocator, node);
+                    }
+
+                    return NULL;
+                }
+
+                child->name = name;
+
+                if (name_needs_escaping)
+                {
+                    child->flags |= SH_JSON_NODE_FLAG_NAME_NEEDS_ESCAPING;
+                }
+
+                node->count += 1;
+                ShDListInsertBefore(&node->value.children, &child->list);
+
+                while (_sh_json_matches(parser, ','))
+                {
+                    _sh_json_skip_whitespaces(parser);
+
+                    if (!_sh_json_parse_string(parser, &name, &name_needs_escaping))
+                    {
+                        if (!(parser->flags & SH_JSON_FLAG_DONT_FREE_NODES_ON_FAILURE))
+                        {
+                            sh_json_free_node(allocator, node);
+                        }
+
+                        return NULL;
+                    }
+
+                    _sh_json_skip_whitespaces(parser);
+
+                    if (!_sh_json_matches(parser, ':'))
+                    {
+                        fprintf(stderr, "line %u: error: expected ':' after object member name.\n", parser->line);
+
+                        if (!(parser->flags & SH_JSON_FLAG_DONT_FREE_NODES_ON_FAILURE))
+                        {
+                            sh_json_free_node(allocator, node);
+                        }
+
+                        return NULL;
+                    }
+
+                    child = _sh_json_parse_value(allocator, parser);
+
+                    if (!child)
+                    {
+                        if (!(parser->flags & SH_JSON_FLAG_DONT_FREE_NODES_ON_FAILURE))
+                        {
+                            sh_json_free_node(allocator, node);
+                        }
+
+                        return NULL;
+                    }
+
+                    child->name = name;
+
+                    if (name_needs_escaping)
+                    {
+                        child->flags |= SH_JSON_NODE_FLAG_NAME_NEEDS_ESCAPING;
+                    }
+
+                    node->count += 1;
+                    ShDListInsertBefore(&node->value.children, &child->list);
+                }
+
+                if (!_sh_json_matches(parser, '}'))
+                {
+                    fprintf(stderr, "line %u: error: object is missing closing '}'.\n", parser->line);
+
+                    if (!(parser->flags & SH_JSON_FLAG_DONT_FREE_NODES_ON_FAILURE))
+                    {
+                        sh_json_free_node(allocator, node);
+                    }
+
+                    return NULL;
+                }
+            }
+        } break;
+
+        case '"':
+        {
+            ShString str;
+            bool needs_escaping;
+
+            if (_sh_json_parse_string(parser, &str, &needs_escaping))
+            {
+                node = _sh_json_alloc_node(allocator, SH_JSON_VALUE_TYPE_STRING);
+
+                if (needs_escaping)
+                {
+                    node->flags |= SH_JSON_NODE_FLAG_VALUE_NEEDS_ESCAPING;
+                }
+
+                node->value.string = str;
+            }
+        } break;
+
+        case 't':
+        {
+            ShString str = ShMakeString(parser->input.count - parser->index, parser->input.data + parser->index);
+
+            if (sh_string_starts_with(str, ShStringLiteral("true")))
+            {
+                parser->index += ShStringLiteral("true").count;
+                node = _sh_json_alloc_node(allocator, SH_JSON_VALUE_TYPE_BOOLEAN);
+                node->value.boolean = true;
+            }
+            else
+            {
+                fprintf(stderr, "line %u: error: expected value.\n", parser->line);
+            }
+        } break;
+
+        case 'f':
+        {
+            ShString str = ShMakeString(parser->input.count - parser->index, parser->input.data + parser->index);
+
+            if (sh_string_starts_with(str, ShStringLiteral("false")))
+            {
+                parser->index += ShStringLiteral("false").count;
+                node = _sh_json_alloc_node(allocator, SH_JSON_VALUE_TYPE_BOOLEAN);
+                node->value.boolean = false;
+            }
+            else
+            {
+                fprintf(stderr, "line %u: error: expected value.\n", parser->line);
+            }
+        } break;
+
+        case 'n':
+        {
+            ShString str = ShMakeString(parser->input.count - parser->index, parser->input.data + parser->index);
+
+            if (sh_string_starts_with(str, ShStringLiteral("null")))
+            {
+                parser->index += ShStringLiteral("null").count;
+                node = _sh_json_alloc_node(allocator, SH_JSON_VALUE_TYPE_NULL);
+            }
+            else
+            {
+                fprintf(stderr, "line %u: error: expected value.\n", parser->line);
+            }
+        } break;
+
+        case '-':
+        case '0': case '1': case '2': case '3': case '4':
+        case '5': case '6': case '7': case '8': case '9':
+        {
+            bool is_signed = false;
+
+            if (c == '-')
+            {
+                is_signed = true;
+                parser->index += 1;
+            }
+
+            if ((parser->index >= parser->input.count) ||
+                !sh_unicode_is_digit(parser->input.data[parser->index]))
+            {
+                fprintf(stderr, "line %u: error: expected number.\n", parser->line);
+                return NULL;
+            }
+
+            c = parser->input.data[parser->index];
+            parser->index += 1;
+
+            bool is_float = false;
+            int64_t integer_value = c - '0';
+
+            if (c != '0')
+            {
+                while ((parser->index < parser->input.count) && sh_unicode_is_digit(parser->input.data[parser->index]))
+                {
+                    c = parser->input.data[parser->index];
+                    parser->index += 1;
+                    integer_value = (10 * integer_value) + (c - '0');
+                }
+            }
+
+            double float_value = (double) integer_value;
+
+            if (_sh_json_matches(parser, '.'))
+            {
+                is_float = true;
+
+                if ((parser->index >= parser->input.count) ||
+                    !sh_unicode_is_digit(parser->input.data[parser->index]))
+                {
+                    fprintf(stderr, "line %u: error: expected digits after '.'.\n", parser->line);
+                    return NULL;
+                }
+
+                double factor = 1.0 / 10.0;
+
+                while ((parser->index < parser->input.count) && sh_unicode_is_digit(parser->input.data[parser->index]))
+                {
+                    c = parser->input.data[parser->index];
+                    parser->index += 1;
+                    float_value += factor * (double) (c - '0');
+                    factor /= 10.0;
+                }
+            }
+
+            if (_sh_json_matches(parser, 'e') || _sh_json_matches(parser, 'E'))
+            {
+                is_float = true;
+                bool exponent_is_signed = false;
+
+                if (_sh_json_matches(parser, '-'))
+                {
+                    exponent_is_signed = true;
+                }
+                else if (_sh_json_matches(parser, '+'))
+                {
+                }
+
+                if ((parser->index >= parser->input.count) ||
+                    !sh_unicode_is_digit(parser->input.data[parser->index]))
+                {
+                    fprintf(stderr, "line %u: error: expected digits after 'e/E'.\n", parser->line);
+                    return NULL;
+                }
+
+                uint64_t exponent = 0;
+
+                while ((parser->index < parser->input.count) && sh_unicode_is_digit(parser->input.data[parser->index]))
+                {
+                    c = parser->input.data[parser->index];
+                    parser->index += 1;
+                    exponent = (10 * exponent) + (c - '0');
+                }
+
+                if (exponent_is_signed)
+                {
+                    for (uint64_t i = 0; i < exponent; i += 1)
+                    {
+                        float_value /= 10.0;
+                    }
+                }
+                else
+                {
+                    for (uint64_t i = 0; i < exponent; i += 1)
+                    {
+                        float_value *= 10.0;
+                    }
+                }
+            }
+
+            if (is_float)
+            {
+                if (is_signed)
+                {
+                    float_value = -float_value;
+                }
+
+                node = _sh_json_alloc_node(allocator, SH_JSON_VALUE_TYPE_NUMBER_FLOAT);
+                node->value.number_float = float_value;
+            }
+            else
+            {
+                if (is_signed)
+                {
+                    integer_value = -integer_value;
+                }
+
+                node = _sh_json_alloc_node(allocator, SH_JSON_VALUE_TYPE_NUMBER_INTEGER);
+                node->value.number_integer = integer_value;
+            }
+        } break;
+
+        default:
+        {
+            fprintf(stderr, "line %u: error: expected value.\n", parser->line);
+        } break;
+    }
+
+    _sh_json_skip_whitespaces(parser);
+
+    return node;
+}
+
+SH_JSON_DEF ShJsonNode *
+sh_json_parse(ShAllocator allocator, ShString json_str, uint32_t flags)
+{
+    // TODO: should we reuse the ShJsonParser or create a separate struct?
+    // TODO: store the allocator on the parser
+    ShJsonParser parser;
+    parser.flags = flags;
+    parser.line = 1;
+    parser.index = 0;
+    parser.input = json_str;
+
+    return _sh_json_parse_value(allocator, &parser);
 }
 
 #endif // SH_JSON_IMPLEMENTATION

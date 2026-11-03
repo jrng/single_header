@@ -122,6 +122,17 @@ int main(void)
                     break;
                 }
             }
+
+            ShJsonNode *node = sh_json_parse(temp_memory.allocator, json_str, SH_JSON_FLAG_DONT_FREE_NODES_ON_FAILURE);
+
+            if (node)
+            {
+                fprintf(stderr, "  '%" ShStringFmt "'  OK\n", ShStringArg(filename));
+            }
+            else
+            {
+                fprintf(stderr, "  '%" ShStringFmt "'  ERROR should have succeeded\n", ShStringArg(filename));
+            }
         }
         else
         {
@@ -168,6 +179,17 @@ int main(void)
                     fprintf(stderr, "  '%" ShStringFmt "'  OK\n", ShStringArg(filename));
                     break;
                 }
+            }
+
+            ShJsonNode *node = sh_json_parse(temp_memory.allocator, json_str, SH_JSON_FLAG_DONT_FREE_NODES_ON_FAILURE);
+
+            if (node)
+            {
+                fprintf(stderr, "  '%" ShStringFmt "'  ERROR should have failed\n", ShStringArg(filename));
+            }
+            else
+            {
+                fprintf(stderr, "  '%" ShStringFmt "'  OK\n", ShStringArg(filename));
             }
         }
         else
