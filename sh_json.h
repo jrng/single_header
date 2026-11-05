@@ -124,6 +124,8 @@ SH_JSON_DEF ShString sh_json_escape_string(ShAllocator allocator, ShString str);
 SH_JSON_DEF void sh_json_parser_init(ShJsonParser *parser, ShString json_str);
 SH_JSON_DEF ShJsonResult sh_json_parser_get_next_element(ShJsonParser *parser, ShJsonElement *element);
 SH_JSON_DEF ShJsonNode *sh_json_parse(ShAllocator allocator, ShString json_str, uint32_t flags);
+SH_JSON_DEF ShJsonNode *sh_json_find_child_by_name(ShJsonNode *node, ShString name);
+SH_JSON_DEF ShJsonNode *sh_json_find_child_by_index(ShJsonNode *node, uint32_t index);
 SH_JSON_DEF void sh_json_free_node(ShAllocator allocator, ShJsonNode *node);
 
 #endif // __SH_JSON_INCLUDE__
@@ -793,20 +795,6 @@ _sh_json_alloc_node(ShAllocator allocator, ShJsonValueType type)
     return node;
 }
 
-SH_JSON_DEF void
-sh_json_free_node(ShAllocator allocator, ShJsonNode *node)
-{
-    if ((node->type == SH_JSON_VALUE_TYPE_ARRAY) || (node->type == SH_JSON_VALUE_TYPE_OBJECT))
-    {
-        ShDListForEach(ShList, child, &node->value.children)
-        {
-            sh_json_free_node(allocator, ShContainerOf(child, ShJsonNode, list));
-        }
-    }
-
-    sh_free(allocator, node);
-}
-
 static ShJsonNode *
 _sh_json_parse_value(ShAllocator allocator, ShJsonParser *parser)
 {
@@ -1223,6 +1211,68 @@ sh_json_parse(ShAllocator allocator, ShString json_str, uint32_t flags)
     parser.input = json_str;
 
     return _sh_json_parse_value(allocator, &parser);
+}
+
+SH_JSON_DEF ShJsonNode *
+sh_json_find_child_by_name(ShJsonNode *node, ShString name)
+{
+    ShJsonNode *result = NULL;
+
+    if (node->type == SH_JSON_VALUE_TYPE_OBJECT)
+    {
+        ShDListForEach(ShList, child, &node->value.children)
+        {
+            ShJsonNode *child_node = ShContainerOf(child, ShJsonNode, list);
+
+            if (sh_string_equal(child_node->name, name))
+            {
+                result = child_node;
+                break;
+            }
+        }
+    }
+
+    return result;
+}
+
+SH_JSON_DEF ShJsonNode *
+sh_json_find_child_by_index(ShJsonNode *node, uint32_t index)
+{
+    ShJsonNode *result = NULL;
+
+    uint32_t i = 0;
+
+    if ((node->type == SH_JSON_VALUE_TYPE_ARRAY) && (index < node->count))
+    {
+        ShDListForEach(ShList, child, &node->value.children)
+        {
+            ShJsonNode *child_node = ShContainerOf(child, ShJsonNode, list);
+
+            if (i == index)
+            {
+                result = child_node;
+                break;
+            }
+
+            i += 1;
+        }
+    }
+
+    return result;
+}
+
+SH_JSON_DEF void
+sh_json_free_node(ShAllocator allocator, ShJsonNode *node)
+{
+    if ((node->type == SH_JSON_VALUE_TYPE_ARRAY) || (node->type == SH_JSON_VALUE_TYPE_OBJECT))
+    {
+        ShDListForEach(ShList, child, &node->value.children)
+        {
+            sh_json_free_node(allocator, ShContainerOf(child, ShJsonNode, list));
+        }
+    }
+
+    sh_free(allocator, node);
 }
 
 #endif // SH_JSON_IMPLEMENTATION
