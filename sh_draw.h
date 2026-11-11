@@ -16,6 +16,7 @@
 
 SH_DRAW_DEF void sh_image_clear(ShImage image, ShColor clear_color);
 
+SH_DRAW_DEF ShColor sh_image_get_pixel(ShImage image, int32_t x, int32_t y);
 SH_DRAW_DEF void sh_image_set_pixel(ShImage image, int32_t x, int32_t y, ShColor color);
 
 SH_DRAW_DEF void sh_image_stroke_line(ShImage image, int32_t x0, int32_t y0, int32_t x1, int32_t y1, ShColor color);
@@ -139,6 +140,87 @@ sh_image_clear(ShImage image, ShColor clear_color)
 
         default: assert(!"unimplemented"); break;
     }
+}
+
+SH_DRAW_DEF ShColor
+sh_image_get_pixel(ShImage image, int32_t x, int32_t y)
+{
+    assert(image.format != SH_PIXEL_FORMAT_NONE);
+
+    if ((x < 0) || (y < 0) || (x >= image.width) || (y >= image.height))
+    {
+        return ShMakeColor(0.0f, 0.0f, 0.0f, 1.0f);
+    }
+
+    ShColor result = ShMakeColor(0.0f, 0.0f, 0.0f, 1.0f);
+
+    switch (image.format)
+    {
+        case SH_PIXEL_FORMAT_NONE: break;
+
+        case SH_PIXEL_FORMAT_GRAY1:
+        case SH_PIXEL_FORMAT_GRAY2:
+        case SH_PIXEL_FORMAT_GRAY4:
+        case SH_PIXEL_FORMAT_GRAY8:
+        {
+            float l;
+
+            if (image.format == SH_PIXEL_FORMAT_GRAY1)
+            {
+                uint8_t *pixel = (uint8_t *) image.pixels + (image.stride * y) + (x / 8);
+                l = (((*pixel >> (7 - (x % 8))) & 0x1) / 1.0f);
+            }
+            else if (image.format == SH_PIXEL_FORMAT_GRAY2)
+            {
+                uint8_t *pixel = (uint8_t *) image.pixels + (image.stride * y) + (x / 4);
+                l = (((*pixel >> (2 * (3 - (x % 4)))) & 0x3) / 3.0f);
+            }
+            else if (image.format == SH_PIXEL_FORMAT_GRAY4)
+            {
+                uint8_t *pixel = (uint8_t *) image.pixels + (image.stride * y) + (x / 2);
+                l = (((*pixel >> (4 * (1 - (x % 2)))) & 0xF) / 15.0f);
+            }
+            else
+            {
+                assert(image.format == SH_PIXEL_FORMAT_GRAY8);
+
+                uint8_t *pixel = (uint8_t *) image.pixels + (image.stride * y) + x;
+                l = (*pixel / 255.0f);
+            }
+
+            result.r = l;
+            result.g = l;
+            result.b = l;
+            result.a = 1.0f;
+        } break;
+
+        case SH_PIXEL_FORMAT_RGBA8:
+        case SH_PIXEL_FORMAT_BGRA8:
+        {
+            uint8_t *pixel = (uint8_t *) image.pixels + (image.stride * y) + (4 * x);
+
+            if (image.format == SH_PIXEL_FORMAT_RGBA8)
+            {
+                result.r = (pixel[0] / 255.0f);
+                result.g = (pixel[1] / 255.0f);
+                result.b = (pixel[2] / 255.0f);
+                result.a = (pixel[3] / 255.0f);
+            }
+            else
+            {
+                assert(image.format == SH_PIXEL_FORMAT_BGRA8);
+
+                result.b = (pixel[0] / 255.0f);
+                result.g = (pixel[1] / 255.0f);
+                result.r = (pixel[2] / 255.0f);
+                result.a = (pixel[3] / 255.0f);
+            }
+        } break;
+
+        default: assert(!"unimplemented"); break;
+    }
+
+    return result;
 }
 
 SH_DRAW_DEF void
